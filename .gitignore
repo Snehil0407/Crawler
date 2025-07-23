@@ -1,0 +1,15 @@
+__pycache__/
+.venv/
+*.pyc
+.env
+*.log
+reports/*.json
+scan_results/
+
+# Node.js dependencies
+node_modules/
+
+# Firebase credentials
+firebase/serviceAccountKey.json
+*serviceAccountKey.json
+!serviceAccountKey.template.json
