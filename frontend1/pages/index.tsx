@@ -7,6 +7,7 @@ import { ChartsSection } from '../components/ChartsSection';
 import { VulnerabilitiesSection } from '../components/VulnerabilitiesSection';
 import { RecentScansSection } from '../components/RecentScansSection';
 import { ReportsPage } from '../components/ReportsPage';
+import { AIAssistantPage } from '../components/AIAssistantPage';
 import { VulnerabilityModal } from '../components/VulnerabilityModal';
 import { scanAPI } from '../lib/api';
 import { ScanResult, Vulnerability, RecentScan, SeverityStats } from '../types';
@@ -16,6 +17,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [scanResults, setScanResults] = useState<ScanResult | null>(null);
   const [recentScans, setRecentScans] = useState<RecentScan[]>([]);
+  const [dashboardRecentScans, setDashboardRecentScans] = useState<RecentScan[]>([]);
   const [selectedVulnerability, setSelectedVulnerability] = useState<Vulnerability | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [stats, setStats] = useState<SeverityStats>({
@@ -28,6 +30,7 @@ export default function Home() {
   // Load recent scans on component mount
   useEffect(() => {
     loadRecentScans();
+    loadDashboardRecentScans();
   }, []);
 
   // Update stats when scan results change
@@ -45,6 +48,17 @@ export default function Home() {
       }
     } catch (error) {
       console.error('Error loading recent scans:', error);
+    }
+  };
+
+  const loadDashboardRecentScans = async () => {
+    try {
+      const response = await scanAPI.getDashboardRecentScans();
+      if (response.success) {
+        setDashboardRecentScans(response.scans);
+      }
+    } catch (error) {
+      console.error('Error loading dashboard recent scans:', error);
     }
   };
 
@@ -74,6 +88,7 @@ export default function Home() {
         if (results.success) {
           setScanResults(results.results);
           loadRecentScans(); // Refresh recent scans
+          loadDashboardRecentScans(); // Refresh dashboard recent scans
         }
       } catch (error) {
         console.error('Error loading scan results:', error);
@@ -124,6 +139,18 @@ export default function Home() {
     }
   };
 
+  const handleDashboardScanClick = async (scanId: string) => {
+    try {
+      const results = await scanAPI.getScanResults(scanId);
+      if (results.success) {
+        setScanResults(results.results);
+        // Stay on dashboard, don't switch tabs
+      }
+    } catch (error) {
+      console.error('Error loading historical scan from dashboard:', error);
+    }
+  };
+
   return (
     <ProtectedRoute>
       <div className="min-h-screen bg-gray-50">
@@ -137,6 +164,18 @@ export default function Home() {
 
               {/* Stats Section */}
               <StatsSection stats={stats} />
+
+              {/* Recent Scans Section on Dashboard */}
+              {dashboardRecentScans.length > 0 && (
+                <RecentScansSection
+                  scans={dashboardRecentScans}
+                  onScanClick={handleDashboardScanClick}
+                  onRefresh={loadDashboardRecentScans}
+                  className="mb-8"
+                  showTitle={true}
+                  maxItems={3}
+                />
+              )}
 
               {/* Charts Section */}
               {scanResults?.vulnerabilities && scanResults.vulnerabilities.length > 0 && (
@@ -154,17 +193,37 @@ export default function Home() {
           )}
 
           {activeTab === 'scans' && (
-            <RecentScansSection
-              scans={recentScans}
-              onScanClick={handleScanClick}
-              onRefresh={loadRecentScans}
-            />
+            <>
+              <RecentScansSection
+                scans={recentScans}
+                onScanClick={handleScanClick}
+                onRefresh={loadRecentScans}
+              />
+              
+              {/* Show scan results if a scan is selected */}
+              {scanResults?.vulnerabilities && (
+                <>
+                  <ChartsSection vulnerabilities={scanResults.vulnerabilities} />
+                  <VulnerabilitiesSection
+                    vulnerabilities={scanResults.vulnerabilities}
+                    onVulnerabilityClick={handleVulnerabilityClick}
+                  />
+                </>
+              )}
+            </>
           )}
 
           {activeTab === 'reports' && (
             <ReportsPage
               scans={recentScans}
               onScanClick={handleScanClick}
+              onRefresh={loadRecentScans}
+            />
+          )}
+
+          {activeTab === 'assistant' && (
+            <AIAssistantPage
+              scans={recentScans}
               onRefresh={loadRecentScans}
             />
           )}

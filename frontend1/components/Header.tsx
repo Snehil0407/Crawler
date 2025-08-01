@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shield, BarChart3, Bug, Clock, LogOut, User } from 'lucide-react';
+import { Shield, BarChart3, Bug, Clock, LogOut, User, Bot } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -43,6 +43,7 @@ export const Header: React.FC<HeaderProps> = ({
               { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
               { id: 'scans', label: 'Recent Scans', icon: Clock },
               { id: 'reports', label: 'Reports', icon: Bug },
+              { id: 'assistant', label: 'AI Assistant', icon: Bot },
             ].map(({ id, label, icon: Icon }) => (
               <button
                 key={id}

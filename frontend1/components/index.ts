@@ -6,4 +6,5 @@ export * from './VulnerabilitiesSection';
 export * from './RecentScansSection';
 export * from './VulnerabilityModal';
 export * from './ReportsPage';
+export * from './AIAssistantPage';
 export { default as ProtectedRoute } from './ProtectedRoute';

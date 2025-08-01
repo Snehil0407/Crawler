@@ -279,6 +279,7 @@ app.get('/api/scans', async (req, res) => {
         const limit = parseInt(req.query.limit) || 10;
         
         const db = getDatabase();
+        // Use indexed query with timestamp index to avoid the Firebase warning
         const scansRef = db.ref('scans').orderByChild('timestamp').limitToLast(limit);
         const snapshot = await scansRef.once('value');
         const scans = snapshot.val() || {};
@@ -297,6 +298,43 @@ app.get('/api/scans', async (req, res) => {
         
     } catch (error) {
         console.error('Error listing scans:', error);
+        res.status(500).json({
+            error: 'Internal server error',
+            message: error.message,
+            success: false
+        });
+    }
+});
+
+// Get recent scans for dashboard endpoint
+app.get('/api/dashboard/recent-scans', async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 5;
+        
+        const db = getDatabase();
+        // Use indexed query to get recent completed scans
+        const scansRef = db.ref('scans').orderByChild('timestamp').limitToLast(limit * 2); // Get more to filter completed ones
+        const snapshot = await scansRef.once('value');
+        const scans = snapshot.val() || {};
+        
+        // Convert to array, filter completed scans, and sort by timestamp (newest first)
+        const scanArray = Object.entries(scans)
+            .map(([id, data]) => ({
+                id,
+                ...data
+            }))
+            .filter(scan => scan.status === 'completed')
+            .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+            .slice(0, limit);
+        
+        res.json({
+            success: true,
+            scans: scanArray,
+            count: scanArray.length
+        });
+        
+    } catch (error) {
+        console.error('Error listing recent scans for dashboard:', error);
         res.status(500).json({
             error: 'Internal server error',
             message: error.message,

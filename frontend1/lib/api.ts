@@ -29,6 +29,11 @@ export const scanAPI = {
     return response.data;
   },
 
+  getDashboardRecentScans: async (limit: number = 5): Promise<{ success: boolean; scans: RecentScan[] }> => {
+    const response = await api.get(`/api/dashboard/recent-scans?limit=${limit}`);
+    return response.data;
+  },
+
   healthCheck: async (): Promise<{ status: string }> => {
     const response = await api.get('/api/health');
     return response.data;

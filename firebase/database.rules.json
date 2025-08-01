@@ -1,0 +1,20 @@
+{
+  "rules": {
+    "scans": {
+      ".indexOn": ["timestamp"],
+      ".read": true,
+      ".write": true,
+      "$scanId": {
+        ".validate": "newData.hasChildren(['url', 'status', 'timestamp'])"
+      }
+    },
+    "users": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$uid": {
+        ".read": "$uid === auth.uid",
+        ".write": "$uid === auth.uid"
+      }
+    }
+  }
+}

@@ -50,39 +50,47 @@ interface RecentScansSectionProps {
   onScanClick: (scanId: string) => void;
   onRefresh: () => void;
   className?: string;
+  showTitle?: boolean;
+  maxItems?: number;
 }
 
 export const RecentScansSection: React.FC<RecentScansSectionProps> = ({ 
   scans, 
   onScanClick,
   onRefresh,
-  className 
+  className,
+  showTitle = true,
+  maxItems
 }) => {
+  const displayScans = maxItems ? scans.slice(0, maxItems) : scans;
+  
   return (
     <section className={cn("mb-8", className)}>
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-2">
-            <Clock className="h-5 w-5 text-primary-600" />
-            <h3 className="text-lg font-semibold text-gray-900">
-              Recent Scans
-            </h3>
-          </div>
-          
-          <div className="flex items-center gap-3">
-            <div className="hidden sm:block text-sm text-gray-500">
-              💡 Visit the <span className="font-medium text-primary-600">Reports</span> tab for advanced export options
+        {showTitle && (
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-primary-600" />
+              <h3 className="text-lg font-semibold text-gray-900">
+                Recent Scans
+              </h3>
             </div>
-            <button
-              onClick={onRefresh}
-              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              <RefreshCw className="h-4 w-4" />
-            </button>
+            
+            <div className="flex items-center gap-3">
+              <div className="hidden sm:block text-sm text-gray-500">
+                💡 Visit the <span className="font-medium text-primary-600">Reports</span> tab for advanced export options
+              </div>
+              <button
+                onClick={onRefresh}
+                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <RefreshCw className="h-4 w-4" />
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
-        {scans.length === 0 ? (
+        {displayScans.length === 0 ? (
           <div className="text-center py-8">
             <Clock className="h-12 w-12 text-gray-400 mx-auto mb-3" />
             <p className="text-gray-500">
@@ -91,13 +99,24 @@ export const RecentScansSection: React.FC<RecentScansSectionProps> = ({
           </div>
         ) : (
           <div className="space-y-3">
-            {scans.map((scan) => (
+            {displayScans.map((scan) => (
               <RecentScanItem
                 key={scan.id}
                 scan={scan}
                 onClick={() => onScanClick(scan.id)}
               />
             ))}
+            
+            {maxItems && scans.length > maxItems && (
+              <div className="text-center pt-4 border-t border-gray-100">
+                <p className="text-sm text-gray-500">
+                  Showing {maxItems} of {scans.length} scans. 
+                  <span className="font-medium text-primary-600 ml-1">
+                    Visit the Scans tab to see all results.
+                  </span>
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>
