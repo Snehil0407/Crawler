@@ -105,10 +105,10 @@ export const ChartsSection: React.FC<ChartsSectionProps> = ({ vulnerabilities, c
     <section className={cn("mb-8", className)}>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Vulnerability Distribution Chart */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center gap-2 mb-6">
-            <PieChart className="h-5 w-5 text-primary-600" />
-            <h3 className="text-lg font-semibold text-gray-900">
+            <PieChart className="h-5 w-5 text-primary-600 dark:text-primary-400" />
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               Vulnerability Distribution
             </h3>
           </div>
@@ -118,10 +118,10 @@ export const ChartsSection: React.FC<ChartsSectionProps> = ({ vulnerabilities, c
         </div>
 
         {/* OWASP Top 10 Coverage Chart */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center gap-2 mb-6">
-            <BarChart3 className="h-5 w-5 text-primary-600" />
-            <h3 className="text-lg font-semibold text-gray-900">
+            <BarChart3 className="h-5 w-5 text-primary-600 dark:text-primary-400" />
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               OWASP Top 10 Coverage
             </h3>
           </div>

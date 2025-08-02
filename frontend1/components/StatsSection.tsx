@@ -12,23 +12,39 @@ interface StatsCardProps {
 
 const StatsCard: React.FC<StatsCardProps> = ({ title, count, icon: Icon, severity }) => {
   const severityConfig = {
-    critical: { color: 'text-critical', bg: 'bg-red-50', border: 'border-red-200' },
-    high: { color: 'text-high', bg: 'bg-orange-50', border: 'border-orange-200' },
-    medium: { color: 'text-medium', bg: 'bg-yellow-50', border: 'border-yellow-200' },
-    low: { color: 'text-low', bg: 'bg-green-50', border: 'border-green-200' },
+    critical: { 
+      color: 'text-critical', 
+      bg: 'bg-red-50 dark:bg-red-900/20', 
+      border: 'border-red-200 dark:border-red-800' 
+    },
+    high: { 
+      color: 'text-high', 
+      bg: 'bg-orange-50 dark:bg-orange-900/20', 
+      border: 'border-orange-200 dark:border-orange-800' 
+    },
+    medium: { 
+      color: 'text-medium', 
+      bg: 'bg-yellow-50 dark:bg-yellow-900/20', 
+      border: 'border-yellow-200 dark:border-yellow-800' 
+    },
+    low: { 
+      color: 'text-low', 
+      bg: 'bg-green-50 dark:bg-green-900/20', 
+      border: 'border-green-200 dark:border-green-800' 
+    },
   };
 
   const config = severityConfig[severity];
 
   return (
     <div className={cn(
-      "bg-white rounded-xl border-2 p-6 transition-all hover:shadow-lg",
+      "bg-white dark:bg-gray-800 rounded-xl border-2 p-6 transition-all hover:shadow-lg dark:hover:shadow-xl",
       config.border
     )}>
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-2xl font-bold text-gray-900">{count}</p>
-          <p className="text-sm text-gray-600 mt-1">{title}</p>
+          <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{count}</p>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{title}</p>
         </div>
         <div className={cn("p-3 rounded-lg", config.bg)}>
           <Icon className={cn("h-6 w-6", config.color)} />

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Download, Calendar, Bug, Clock, ExternalLink, Filter, Search, ChevronDown, X, FileJson, Table, CheckCircle } from 'lucide-react';
+import { FileText, Download, Calendar, Bug, Clock, ExternalLink, Filter, Search, ChevronDown, X, FileJson, Table, CheckCircle, Trash2 } from 'lucide-react';
 import { RecentScan, ScanResult } from '../types';
 import { formatTimestamp, cn } from '../lib/utils';
 import { scanAPI } from '../lib/api';
@@ -384,10 +384,10 @@ const ReportExportModal: React.FC<ReportExportModalProps> = ({
   const totalVulns = scan.summary?.scan_info?.total_vulnerabilities || 0;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-black dark:bg-opacity-70 flex items-center justify-center p-4 z-50">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
           <div>
             <h2 className="text-xl font-semibold text-gray-900">Export Security Report</h2>
             <p className="text-sm text-gray-500 mt-1">Export scan results for {url}</p>
@@ -563,7 +563,9 @@ const ReportCard: React.FC<{
   scan: RecentScan;
   onClick: () => void;
   onExport: () => void;
-}> = ({ scan, onClick, onExport }) => {
+  onDelete: (scanId: string) => void;
+}> = ({ scan, onClick, onExport, onDelete }) => {
+  const [isDeleting, setIsDeleting] = useState(false);
   const totalVulns = scan.summary?.scan_info?.total_vulnerabilities || 0;
   const duration = scan.summary?.scan_info?.duration || 0;
   const url = scan.summary?.scan_info?.target_url || scan.url || 'Unknown URL';
@@ -582,21 +584,45 @@ const ReportCard: React.FC<{
     return 'High Risk';
   };
 
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    // Show confirmation dialog
+    const confirmed = window.confirm(
+      `Are you sure you want to delete this scan report?\n\nURL: ${url}\nDate: ${formatTimestamp(scan.timestamp)}\n\nThis action cannot be undone.`
+    );
+    
+    if (!confirmed) {
+      return;
+    }
+
+    setIsDeleting(true);
+    
+    try {
+      await onDelete(scan.id);
+    } catch (error) {
+      console.error('Error deleting scan:', error);
+      alert('Failed to delete scan. Please try again.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-6 hover:shadow-lg transition-all duration-300 group animate-fade-in">
+    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 hover:shadow-lg dark:hover:shadow-xl transition-all duration-300 group animate-fade-in">
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2">
-            <FileText className="h-5 w-5 text-primary-600 flex-shrink-0" />
-            <h3 className="text-lg font-semibold text-gray-900 truncate">
+            <FileText className="h-5 w-5 text-primary-600 dark:text-primary-400 flex-shrink-0" />
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
               Security Report
             </h3>
           </div>
-          <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
+          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mb-2">
             <ExternalLink className="h-4 w-4 flex-shrink-0" />
             <span className="truncate" title={url}>{url}</span>
           </div>
-          <div className="flex items-center gap-4 text-sm text-gray-500">
+          <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
             <div className="flex items-center gap-1">
               <Calendar className="h-4 w-4" />
               <span>{formatTimestamp(scan.timestamp)}</span>
@@ -609,26 +635,42 @@ const ReportCard: React.FC<{
         </div>
         
         <div className="flex flex-col items-end gap-2 ml-4">
-          <div className={cn(
-            "px-3 py-1 rounded-full text-xs font-medium",
-            getSeverityColor(totalVulns)
-          )}>
-            {getSeverityLabel(totalVulns)}
+          <div className="flex items-center gap-2">
+            <div className={cn(
+              "px-3 py-1 rounded-full text-xs font-medium",
+              getSeverityColor(totalVulns)
+            )}>
+              {getSeverityLabel(totalVulns)}
+            </div>
+            
+            {/* Delete Button */}
+            <button
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className={cn(
+                "p-1.5 rounded-lg transition-all opacity-0 group-hover:opacity-100",
+                "hover:bg-red-100 dark:hover:bg-red-900/30 hover:text-red-600 dark:hover:text-red-400 text-gray-400 dark:text-gray-500",
+                isDeleting && "opacity-100 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 cursor-not-allowed"
+              )}
+              title="Delete report"
+            >
+              <Trash2 className={cn("h-4 w-4", isDeleting && "animate-pulse")} />
+            </button>
           </div>
-          <div className="flex items-center gap-1 text-sm text-gray-600">
+          <div className="flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400">
             <Bug className="h-4 w-4" />
             <span>{totalVulns} issues</span>
           </div>
         </div>
       </div>
 
-      <div className="flex items-center gap-3 pt-4 border-t border-gray-100">
+      <div className="flex items-center gap-3 pt-4 border-t border-gray-100 dark:border-gray-700">
         <button
           onClick={(e) => {
             e.stopPropagation();
             onClick();
           }}
-          className="flex-1 bg-primary-50 hover:bg-primary-100 text-primary-700 font-medium py-2 px-4 rounded-lg transition-colors duration-200"
+          className="flex-1 bg-primary-50 dark:bg-primary-900/20 hover:bg-primary-100 dark:hover:bg-primary-900/30 text-primary-700 dark:text-primary-300 font-medium py-2 px-4 rounded-lg transition-colors duration-200"
         >
           View Details
         </button>
@@ -637,7 +679,7 @@ const ReportCard: React.FC<{
             e.stopPropagation();
             onExport();
           }}
-          className="flex items-center gap-2 bg-gray-50 hover:bg-gray-100 text-gray-700 font-medium py-2 px-4 rounded-lg transition-colors duration-200"
+          className="flex items-center gap-2 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 font-medium py-2 px-4 rounded-lg transition-colors duration-200"
         >
           <Download className="h-4 w-4" />
           Export
@@ -730,6 +772,24 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
     setSelectedScan(null);
   };
 
+  const handleDeleteScan = async (scanId: string) => {
+    try {
+      const result = await scanAPI.deleteScan(scanId);
+      if (result.success) {
+        // Refresh the scans list to remove the deleted scan
+        onRefresh();
+        // Show success message
+        alert('Scan report deleted successfully');
+      } else {
+        alert('Failed to delete scan report: ' + result.message);
+      }
+    } catch (error: any) {
+      console.error('Error deleting scan:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Unknown error occurred';
+      alert('Failed to delete scan report: ' + errorMessage);
+    }
+  };
+
   const totalReports = scans.length;
   const totalVulnerabilities = scans.reduce((sum, scan) => 
     sum + (scan.summary?.scan_info?.total_vulnerabilities || 0), 0
@@ -739,35 +799,35 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
     <div className={cn("space-y-6", className)}>
       {/* Header Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Total Reports</p>
-              <p className="text-2xl font-bold text-gray-900">{totalReports}</p>
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Reports</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{totalReports}</p>
             </div>
-            <div className="bg-primary-50 p-3 rounded-lg">
-              <FileText className="h-6 w-6 text-primary-600" />
+            <div className="bg-primary-50 dark:bg-primary-900/20 p-3 rounded-lg">
+              <FileText className="h-6 w-6 text-primary-600 dark:text-primary-400" />
             </div>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Total Issues Found</p>
-              <p className="text-2xl font-bold text-gray-900">{totalVulnerabilities}</p>
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Issues Found</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{totalVulnerabilities}</p>
             </div>
-            <div className="bg-red-50 p-3 rounded-lg">
-              <Bug className="h-6 w-6 text-red-600" />
+            <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg">
+              <Bug className="h-6 w-6 text-red-600 dark:text-red-400" />
             </div>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Average Scan Time</p>
-              <p className="text-2xl font-bold text-gray-900">
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Average Scan Time</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                 {scans.length > 0 
                   ? Math.round(scans.reduce((sum, scan) => 
                       sum + (scan.summary?.scan_info?.duration || 0), 0
@@ -775,26 +835,26 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
                   : 0}s
               </p>
             </div>
-            <div className="bg-blue-50 p-3 rounded-lg">
-              <Clock className="h-6 w-6 text-blue-600" />
+            <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
+              <Clock className="h-6 w-6 text-blue-600 dark:text-blue-400" />
             </div>
           </div>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+      <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
         <div className="flex flex-col md:flex-row gap-4">
           {/* Search */}
           <div className="flex-1">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500" />
               <input
                 type="text"
                 placeholder="Search by URL..."
                 value={filters.searchTerm}
                 onChange={(e) => setFilters(prev => ({ ...prev, searchTerm: e.target.value }))}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 focus:border-primary-500 dark:focus:border-primary-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
               />
             </div>
           </div>
@@ -804,14 +864,14 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
             <select
               value={filters.dateRange}
               onChange={(e) => setFilters(prev => ({ ...prev, dateRange: e.target.value }))}
-              className="appearance-none bg-white border border-gray-300 rounded-lg px-4 py-2 pr-8 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="appearance-none bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 pr-8 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 focus:border-primary-500 dark:focus:border-primary-400 text-gray-900 dark:text-gray-100"
             >
               <option value="all">All Time</option>
               <option value="24h">Last 24 Hours</option>
               <option value="7d">Last 7 Days</option>
               <option value="30d">Last 30 Days</option>
             </select>
-            <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+            <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500 pointer-events-none" />
           </div>
 
           {/* Severity Filter */}
@@ -819,7 +879,7 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
             <select
               value={filters.severity}
               onChange={(e) => setFilters(prev => ({ ...prev, severity: e.target.value }))}
-              className="appearance-none bg-white border border-gray-300 rounded-lg px-4 py-2 pr-8 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="appearance-none bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 pr-8 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 focus:border-primary-500 dark:focus:border-primary-400 text-gray-900 dark:text-gray-100"
             >
               <option value="all">All Severities</option>
               <option value="clean">Clean</option>
@@ -827,13 +887,13 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
               <option value="medium">Medium Risk</option>
               <option value="high">High Risk</option>
             </select>
-            <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+            <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500 pointer-events-none" />
           </div>
 
           {/* Refresh Button */}
           <button
             onClick={onRefresh}
-            className="flex items-center gap-2 bg-primary-50 hover:bg-primary-100 text-primary-700 font-medium py-2 px-4 rounded-lg transition-colors"
+            className="flex items-center gap-2 bg-primary-50 dark:bg-primary-900/20 hover:bg-primary-100 dark:hover:bg-primary-900/30 text-primary-700 dark:text-primary-300 font-medium py-2 px-4 rounded-lg transition-colors"
           >
             <Clock className="h-4 w-4" />
             Refresh
@@ -850,7 +910,7 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
         </div>
 
         {filteredScans.length === 0 ? (
-          <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-12 text-center">
             <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No reports found</h3>
             <p className="text-gray-500">
@@ -867,6 +927,7 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
                 scan={scan}
                 onClick={() => onScanClick(scan.id)}
                 onExport={() => handleExportClick(scan)}
+                onDelete={handleDeleteScan}
               />
             ))}
           </div>

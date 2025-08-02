@@ -1,7 +1,8 @@
 import React from 'react';
-import { Shield, BarChart3, Bug, Clock, LogOut, User, Bot } from 'lucide-react';
+import { Shield, BarChart3, Bug, Clock, Bot } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
+import { UserDropdown } from './UserDropdown';
 
 interface HeaderProps {
   activeTab?: string;
@@ -14,7 +15,7 @@ export const Header: React.FC<HeaderProps> = ({
   onTabChange, 
   className 
 }) => {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
 
   const handleTabClick = (tabId: string) => {
     if (onTabChange) {
@@ -23,7 +24,7 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className={cn("bg-white shadow-sm border-b border-gray-200", className)}>
+    <header className={cn("bg-white dark:bg-gray-900 shadow-sm border-b border-gray-200 dark:border-gray-700", className)}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
@@ -32,8 +33,8 @@ export const Header: React.FC<HeaderProps> = ({
               <Shield className="h-6 w-6 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-900">WebSentinals</h1>
-              <p className="text-xs text-gray-500">Web Security Audit Platform</p>
+              <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">WebSentinals</h1>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Web Security Audit Platform</p>
             </div>
           </div>
 
@@ -41,7 +42,7 @@ export const Header: React.FC<HeaderProps> = ({
           <nav className="flex space-x-8">
             {[
               { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
-              { id: 'scans', label: 'All Scans', icon: Clock },
+              { id: 'scans', label: 'My Scans', icon: Clock },
               { id: 'reports', label: 'Reports', icon: Bug },
               { id: 'assistant', label: 'AI Assistant', icon: Bot },
             ].map(({ id, label, icon: Icon }) => (
@@ -51,8 +52,8 @@ export const Header: React.FC<HeaderProps> = ({
                 className={cn(
                   "flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors",
                   activeTab === id
-                    ? "text-primary-600 bg-primary-50"
-                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                    ? "text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20"
+                    : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
                 )}
               >
                 <Icon className="h-4 w-4" />
@@ -62,28 +63,8 @@ export const Header: React.FC<HeaderProps> = ({
           </nav>
 
           {/* User Menu */}
-          <div className="flex items-center space-x-4">
-            {user && (
-              <div className="flex items-center space-x-3">
-                <div className="flex items-center space-x-2 text-sm text-gray-700">
-                  <div className="bg-primary-100 p-2 rounded-full">
-                    <User className="h-4 w-4 text-primary-600" />
-                  </div>
-                  <div className="hidden sm:block">
-                    <p className="font-medium">{user.firstName} {user.lastName}</p>
-                    <p className="text-xs text-gray-500">{user.email}</p>
-                  </div>
-                </div>
-                <button
-                  onClick={logout}
-                  className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-md transition-colors"
-                  title="Sign out"
-                >
-                  <LogOut className="h-4 w-4" />
-                  <span className="hidden sm:inline">Sign out</span>
-                </button>
-              </div>
-            )}
+          <div className="flex items-center">
+            {user && <UserDropdown />}
           </div>
         </div>
       </div>

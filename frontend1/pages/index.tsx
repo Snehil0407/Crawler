@@ -133,6 +133,8 @@ export default function Home() {
       const results = await scanAPI.getScanResults(scanId);
       if (results.success) {
         setScanResults(results.results);
+        // Switch to dashboard to show the scan results
+        setActiveTab('dashboard');
       }
     } catch (error) {
       console.error('Error loading historical scan:', error);
@@ -151,9 +153,35 @@ export default function Home() {
     }
   };
 
+  const handleAssistantScanClick = async (scanId: string) => {
+    try {
+      const results = await scanAPI.getScanResults(scanId);
+      if (results.success) {
+        setScanResults(results.results);
+        // Switch to dashboard to show the scan results
+        setActiveTab('dashboard');
+      }
+    } catch (error) {
+      console.error('Error loading historical scan from AI assistant:', error);
+    }
+  };
+
+  const handleReportsScanClick = async (scanId: string) => {
+    try {
+      const results = await scanAPI.getScanResults(scanId);
+      if (results.success) {
+        setScanResults(results.results);
+        // Switch to dashboard to show the scan results
+        setActiveTab('dashboard');
+      }
+    } catch (error) {
+      console.error('Error loading historical scan from reports:', error);
+    }
+  };
+
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         <Header activeTab={activeTab} onTabChange={setActiveTab} />
         
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -199,24 +227,13 @@ export default function Home() {
                 onScanClick={handleScanClick}
                 onRefresh={loadRecentScans}
               />
-              
-              {/* Show scan results if a scan is selected */}
-              {scanResults?.vulnerabilities && (
-                <>
-                  <ChartsSection vulnerabilities={scanResults.vulnerabilities} />
-                  <VulnerabilitiesSection
-                    vulnerabilities={scanResults.vulnerabilities}
-                    onVulnerabilityClick={handleVulnerabilityClick}
-                  />
-                </>
-              )}
             </>
           )}
 
           {activeTab === 'reports' && (
             <ReportsPage
               scans={recentScans}
-              onScanClick={handleScanClick}
+              onScanClick={handleReportsScanClick}
               onRefresh={loadRecentScans}
             />
           )}

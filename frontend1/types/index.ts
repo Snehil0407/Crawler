@@ -48,7 +48,7 @@ export interface ScanResult {
 }
 
 export interface ScanStatus {
-  status: 'running' | 'completed' | 'failed';
+  status: 'running' | 'completed' | 'failed' | 'stopped';
   progress?: number;
   current_task?: string;
   error?: string;
