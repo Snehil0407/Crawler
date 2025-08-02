@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { FileText, Download, Calendar, Bug, Clock, ExternalLink, Filter, Search, ChevronDown, X, FileJson, Table, CheckCircle } from 'lucide-react';
 import { RecentScan, ScanResult } from '../types';
 import { formatTimestamp, cn } from '../lib/utils';
+import { scanAPI } from '../lib/api';
 
 interface ReportsPageProps {
   scans: RecentScan[];
@@ -39,21 +40,21 @@ const ReportExportModal: React.FC<ReportExportModalProps> = ({
     {
       format: 'json' as ExportFormat,
       label: 'JSON Format',
-      description: 'Machine-readable format for integration',
+      description: 'Complete structured data with all vulnerability details, metadata, and scan statistics',
       icon: FileJson,
       color: 'text-blue-600 bg-blue-50 border-blue-200'
     },
     {
       format: 'csv' as ExportFormat,
       label: 'CSV Format',
-      description: 'Spreadsheet format for analysis',
+      description: 'Spreadsheet-friendly format with vulnerability details, payloads, and recommendations',
       icon: Table,
       color: 'text-green-600 bg-green-50 border-green-200'
     },
     {
       format: 'pdf' as ExportFormat,
       label: 'PDF Report',
-      description: 'Professional report for sharing',
+      description: 'Professional HTML report with comprehensive findings and detailed analysis',
       icon: FileText,
       color: 'text-red-600 bg-red-50 border-red-200'
     }
@@ -63,32 +64,49 @@ const ReportExportModal: React.FC<ReportExportModalProps> = ({
     setIsExporting(true);
     
     try {
-      // Simulate export process
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Fetch the complete scan results
+      const response = await scanAPI.getScanResults(scan.id);
       
-      // Mock data for demonstration
-      const mockScanData = {
+      if (!response.success) {
+        throw new Error('Failed to fetch scan results');
+      }
+      
+      const scanData = response.results;
+      
+      // Create comprehensive export data with all available details
+      const exportData = {
         id: scan.id,
-        url: scan.summary?.scan_info?.target_url || scan.url,
+        url: scanData.summary?.scan_info?.target_url || scan.url || 'Unknown URL',
         timestamp: scan.timestamp,
-        duration: scan.summary?.scan_info?.duration || 0,
-        totalVulnerabilities: scan.summary?.scan_info?.total_vulnerabilities || 0,
-        vulnerabilities: [
-          {
-            type: 'XSS',
-            severity: 'high',
-            url: scan.summary?.scan_info?.target_url || scan.url,
-            description: 'Cross-site scripting vulnerability detected'
-          }
-        ]
+        duration: scanData.summary?.scan_info?.duration || 0,
+        totalVulnerabilities: scanData.summary?.scan_info?.total_vulnerabilities || 0,
+        scanInfo: {
+          startTime: scanData.summary?.scan_info?.start_time || scan.timestamp,
+          endTime: scanData.summary?.scan_info?.end_time || scan.timestamp,
+          totalUrlsScanned: scanData.summary?.scan_info?.total_urls_scanned || 0,
+          totalLinksScanned: scanData.summary?.scan_info?.total_links_scanned || 0,
+          totalFormsScanned: scanData.summary?.scan_info?.total_forms_scanned || 0,
+          scanId: scanData.summary?.scan_info?.scan_id || scan.id
+        },
+        vulnerabilities: scanData.vulnerabilities || [],
+        vulnerabilitiesByType: scanData.summary?.vulnerabilities_by_type || {},
+        errorsByType: scanData.summary?.errors_by_type || {},
+        performanceMetrics: {
+          avgResponseTime: scanData.summary?.performance_metrics?.avg_response_time || 0,
+          minResponseTime: scanData.summary?.performance_metrics?.min_response_time || 0,
+          maxResponseTime: scanData.summary?.performance_metrics?.max_response_time || 0
+        },
+        scannedLinks: scanData.scanned_links || [],
+        scannedForms: scanData.scanned_forms || [],
+        scannedUrls: scanData.scanned_urls || []
       };
 
       if (selectedFormat === 'json') {
-        downloadJSON(mockScanData);
+        downloadJSON(exportData);
       } else if (selectedFormat === 'csv') {
-        downloadCSV(mockScanData);
+        downloadCSV(exportData);
       } else if (selectedFormat === 'pdf') {
-        downloadPDF(mockScanData);
+        downloadPDF(exportData);
       }
 
       setExportComplete(true);
@@ -98,18 +116,66 @@ const ReportExportModal: React.FC<ReportExportModalProps> = ({
       }, 2000);
     } catch (error) {
       console.error('Export failed:', error);
+      alert('Export failed. Please try again or check if the scan data is available.');
     } finally {
       setIsExporting(false);
     }
   };
 
   const downloadJSON = (data: any) => {
-    const jsonString = JSON.stringify(data, null, 2);
+    // Create a comprehensive JSON export with all scan data
+    const jsonExport = {
+      reportInfo: {
+        generatedAt: new Date().toISOString(),
+        generatedBy: "WebSentinals Security Scanner",
+        version: "1.0",
+        format: "json"
+      },
+      scanResults: {
+        scanId: data.id,
+        targetUrl: data.url,
+        scanTimestamp: data.timestamp,
+        scanDuration: data.duration,
+        summary: {
+          totalVulnerabilities: data.totalVulnerabilities,
+          totalUrlsScanned: data.scanInfo.totalUrlsScanned,
+          totalLinksScanned: data.scanInfo.totalLinksScanned,
+          totalFormsScanned: data.scanInfo.totalFormsScanned
+        },
+        performanceMetrics: data.performanceMetrics,
+        vulnerabilitiesByType: data.vulnerabilitiesByType,
+        errorsByType: data.errorsByType,
+        vulnerabilities: data.vulnerabilities.map((vuln: any) => ({
+          id: vuln.id || `vuln_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          type: vuln.type,
+          severity: vuln.details?.severity || 'Unknown',
+          url: vuln.url,
+          file: vuln.file,
+          timestamp: vuln.timestamp,
+          description: vuln.details?.description,
+          recommendation: vuln.details?.recommendation,
+          payload: vuln.details?.payload,
+          consequences: vuln.details?.consequences,
+          inputField: vuln.details?.input_field,
+          method: vuln.details?.method,
+          parameter: vuln.details?.parameter,
+          xssType: vuln.details?.xss_type,
+          headerName: vuln.details?.header_name,
+          headerDescription: vuln.details?.header_description,
+          form: vuln.details?.form
+        })),
+        scannedLinks: data.scannedLinks,
+        scannedForms: data.scannedForms,
+        scannedUrls: data.scannedUrls
+      }
+    };
+    
+    const jsonString = JSON.stringify(jsonExport, null, 2);
     const blob = new Blob([jsonString], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `security-report-${scan.id}-${Date.now()}.json`;
+    link.download = `security-report-${data.id}-${Date.now()}.json`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -117,16 +183,36 @@ const ReportExportModal: React.FC<ReportExportModalProps> = ({
   };
 
   const downloadCSV = (data: any) => {
-    const csvHeaders = ['Type', 'Severity', 'URL', 'Description'];
+    const csvHeaders = [
+      'Type', 'Severity', 'URL', 'Description', 'Recommendation', 
+      'Payload', 'Consequences', 'Timestamp', 'File', 'Input Field', 'Method'
+    ];
+    
     const csvRows = data.vulnerabilities.map((vuln: any) => [
-      vuln.type,
-      vuln.severity,
-      vuln.url,
-      `"${vuln.description.replace(/"/g, '""')}"`
+      vuln.type || '',
+      vuln.details?.severity || '',
+      vuln.url || '',
+      `"${(vuln.details?.description || '').replace(/"/g, '""')}"`,
+      `"${(vuln.details?.recommendation || '').replace(/"/g, '""')}"`,
+      `"${(vuln.details?.payload || '').replace(/"/g, '""')}"`,
+      `"${(vuln.details?.consequences || '').replace(/"/g, '""')}"`,
+      vuln.timestamp || '',
+      vuln.file || '',
+      vuln.details?.input_field || '',
+      vuln.details?.method || ''
     ]);
+
+    // Add scan summary row
+    const summaryRow = [
+      'SCAN_SUMMARY', '', data.url, 
+      `"Scan completed with ${data.totalVulnerabilities} vulnerabilities found"`,
+      '', '', '', data.timestamp, '', '', ''
+    ];
 
     const csvContent = [
       csvHeaders.join(','),
+      summaryRow.join(','),
+      '---,---,---,---,---,---,---,---,---,---,---', // Separator
       ...csvRows.map((row: any) => row.join(','))
     ].join('\n');
 
@@ -134,7 +220,7 @@ const ReportExportModal: React.FC<ReportExportModalProps> = ({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `security-report-${scan.id}-${Date.now()}.csv`;
+    link.download = `security-report-${data.id}-${Date.now()}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -145,38 +231,139 @@ const ReportExportModal: React.FC<ReportExportModalProps> = ({
     const htmlContent = `
       <html>
         <head>
-          <title>Security Report</title>
+          <title>WebSentinals Security Report</title>
           <style>
-            body { font-family: Arial, sans-serif; margin: 40px; }
-            .header { border-bottom: 2px solid #667eea; padding-bottom: 20px; margin-bottom: 30px; }
-            .title { color: #667eea; font-size: 24px; font-weight: bold; }
-            .section { margin-bottom: 20px; }
-            .section-title { font-size: 18px; font-weight: bold; margin-bottom: 10px; }
-            .vuln-item { border: 1px solid #ddd; padding: 15px; margin-bottom: 10px; border-radius: 5px; }
-            .severity-high { border-left: 4px solid #ff4757; }
+            body { font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }
+            .header { border-bottom: 3px solid #667eea; padding-bottom: 20px; margin-bottom: 30px; }
+            .title { color: #667eea; font-size: 28px; font-weight: bold; margin-bottom: 10px; }
+            .subtitle { color: #888; font-size: 16px; }
+            .section { margin-bottom: 30px; }
+            .section-title { font-size: 20px; font-weight: bold; margin-bottom: 15px; color: #333; border-bottom: 2px solid #eee; padding-bottom: 5px; }
+            .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+            .info-item { padding: 10px; background: #f8f9fa; border-radius: 5px; }
+            .info-label { font-weight: bold; color: #555; }
+            .vuln-item { border: 1px solid #ddd; padding: 20px; margin-bottom: 15px; border-radius: 8px; background: #fff; }
+            .severity-critical { border-left: 5px solid #dc3545; background: #fff5f5; }
+            .severity-high { border-left: 5px solid #fd7e14; background: #fff8f0; }
+            .severity-medium { border-left: 5px solid #ffc107; background: #fffbf0; }
+            .severity-low { border-left: 5px solid #28a745; background: #f0fff4; }
+            .vuln-header { font-size: 16px; font-weight: bold; margin-bottom: 10px; }
+            .vuln-details { margin-top: 10px; }
+            .vuln-field { margin-bottom: 8px; }
+            .vuln-field strong { color: #555; }
+            .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+            .stat-card { padding: 15px; border: 1px solid #ddd; border-radius: 8px; text-align: center; }
+            .stat-number { font-size: 24px; font-weight: bold; color: #667eea; }
+            .stat-label { color: #666; font-size: 14px; }
+            .summary-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+            .summary-table th, .summary-table td { padding: 10px; border: 1px solid #ddd; text-align: left; }
+            .summary-table th { background: #f8f9fa; font-weight: bold; }
+            .no-vulnerabilities { text-align: center; padding: 40px; color: #28a745; font-size: 18px; }
           </style>
         </head>
         <body>
           <div class="header">
             <div class="title">WebSentinals Security Report</div>
-            <p>Generated on: ${new Date().toLocaleDateString()}</p>
+            <p class="subtitle">Comprehensive Web Security Assessment</p>
+            <p><strong>Generated on:</strong> ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}</p>
           </div>
+
+          <div class="section">
+            <div class="section-title">Scan Overview</div>
+            <div class="stats-grid">
+              <div class="stat-card">
+                <div class="stat-number">${data.totalVulnerabilities}</div>
+                <div class="stat-label">Total Vulnerabilities</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-number">${data.scanInfo.totalUrlsScanned}</div>
+                <div class="stat-label">URLs Scanned</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-number">${data.scanInfo.totalLinksScanned}</div>
+                <div class="stat-label">Links Analyzed</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-number">${data.scanInfo.totalFormsScanned}</div>
+                <div class="stat-label">Forms Tested</div>
+              </div>
+            </div>
+          </div>
+
           <div class="section">
             <div class="section-title">Scan Information</div>
-            <p><strong>Target URL:</strong> ${data.url}</p>
-            <p><strong>Scan Date:</strong> ${formatTimestamp(data.timestamp)}</p>
-            <p><strong>Duration:</strong> ${data.duration}s</p>
-            <p><strong>Total Vulnerabilities:</strong> ${data.totalVulnerabilities}</p>
+            <table class="summary-table">
+              <tr><th>Target URL</th><td>${data.url}</td></tr>
+              <tr><th>Scan Date</th><td>${formatTimestamp(data.timestamp)}</td></tr>
+              <tr><th>Duration</th><td>${data.duration}s</td></tr>
+              <tr><th>Scan ID</th><td>${data.scanInfo.scanId}</td></tr>
+              <tr><th>Performance</th><td>Avg: ${data.performanceMetrics.avgResponseTime.toFixed(2)}s, Min: ${data.performanceMetrics.minResponseTime.toFixed(2)}s, Max: ${data.performanceMetrics.maxResponseTime.toFixed(2)}s</td></tr>
+            </table>
           </div>
+
           <div class="section">
-            <div class="section-title">Vulnerabilities Found</div>
-            ${data.vulnerabilities.map((vuln: any) => `
-              <div class="vuln-item severity-${vuln.severity}">
-                <h4>${vuln.type} - ${vuln.severity.toUpperCase()}</h4>
-                <p><strong>URL:</strong> ${vuln.url}</p>
-                <p><strong>Description:</strong> ${vuln.description}</p>
+            <div class="section-title">Vulnerabilities by Type</div>
+            <table class="summary-table">
+              ${Object.entries(data.vulnerabilitiesByType).map(([type, count]) => `
+                <tr><td>${type.replace(/_/g, ' ').toUpperCase()}</td><td>${count}</td></tr>
+              `).join('')}
+            </table>
+          </div>
+
+          <div class="section">
+            <div class="section-title">Detailed Vulnerability Findings</div>
+            ${data.vulnerabilities.length === 0 ? `
+              <div class="no-vulnerabilities">
+                🎉 No vulnerabilities found! Your website appears to be secure.
               </div>
-            `).join('')}
+            ` : `
+              ${data.vulnerabilities.map((vuln: any, index: number) => `
+                <div class="vuln-item severity-${(vuln.details?.severity || 'low').toLowerCase()}">
+                  <div class="vuln-header">#${index + 1} ${vuln.type.replace(/_/g, ' ').toUpperCase()} - ${(vuln.details?.severity || 'Unknown').toUpperCase()}</div>
+                  <div class="vuln-details">
+                    <div class="vuln-field"><strong>URL:</strong> ${vuln.url}</div>
+                    <div class="vuln-field"><strong>File:</strong> ${vuln.file || 'N/A'}</div>
+                    <div class="vuln-field"><strong>Timestamp:</strong> ${vuln.timestamp}</div>
+                    ${vuln.details?.description ? `<div class="vuln-field"><strong>Description:</strong> ${vuln.details.description}</div>` : ''}
+                    ${vuln.details?.payload ? `<div class="vuln-field"><strong>Payload:</strong> <code>${vuln.details.payload}</code></div>` : ''}
+                    ${vuln.details?.input_field ? `<div class="vuln-field"><strong>Affected Input:</strong> ${vuln.details.input_field}</div>` : ''}
+                    ${vuln.details?.method ? `<div class="vuln-field"><strong>Method:</strong> ${vuln.details.method}</div>` : ''}
+                    ${vuln.details?.recommendation ? `<div class="vuln-field"><strong>Recommendation:</strong> ${vuln.details.recommendation}</div>` : ''}
+                    ${vuln.details?.consequences ? `<div class="vuln-field"><strong>Potential Impact:</strong> ${vuln.details.consequences}</div>` : ''}
+                  </div>
+                </div>
+              `).join('')}
+            `}
+          </div>
+
+          ${data.scannedLinks.length > 0 ? `
+            <div class="section">
+              <div class="section-title">Scanned Links (${data.scannedLinks.length})</div>
+              <ul>
+                ${data.scannedLinks.slice(0, 20).map((link: any) => `
+                  <li>${link.target_url || link}</li>
+                `).join('')}
+                ${data.scannedLinks.length > 20 ? `<li><em>... and ${data.scannedLinks.length - 20} more links</em></li>` : ''}
+              </ul>
+            </div>
+          ` : ''}
+
+          ${data.scannedForms.length > 0 ? `
+            <div class="section">
+              <div class="section-title">Scanned Forms (${data.scannedForms.length})</div>
+              <ul>
+                ${data.scannedForms.slice(0, 10).map((form: any) => `
+                  <li><strong>Action:</strong> ${form.action}, <strong>Method:</strong> ${form.method}, <strong>Inputs:</strong> ${form.inputs?.length || 0}</li>
+                `).join('')}
+                ${data.scannedForms.length > 10 ? `<li><em>... and ${data.scannedForms.length - 10} more forms</em></li>` : ''}
+              </ul>
+            </div>
+          ` : ''}
+
+          <div class="section">
+            <div class="section-title">Report Footer</div>
+            <p><em>This report was generated by WebSentinals - Web Security Audit Platform</em></p>
+            <p><strong>Disclaimer:</strong> This automated security scan provides a snapshot of potential vulnerabilities. Manual security testing and code review are recommended for comprehensive security assessment.</p>
           </div>
         </body>
       </html>
@@ -186,7 +373,7 @@ const ReportExportModal: React.FC<ReportExportModalProps> = ({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `security-report-${scan.id}-${Date.now()}.html`;
+    link.download = `security-report-${data.id}-${Date.now()}.html`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -214,8 +401,8 @@ const ReportExportModal: React.FC<ReportExportModalProps> = ({
         <div className="p-6">
           {/* Scan Summary */}
           <div className="bg-gray-50 rounded-lg p-4 mb-6">
-            <h3 className="font-medium text-gray-900 mb-3">Scan Summary</h3>
-            <div className="grid grid-cols-2 gap-4 text-sm">
+            <h3 className="font-medium text-gray-900 mb-3">Scan Summary - What will be exported</h3>
+            <div className="grid grid-cols-2 gap-4 text-sm mb-4">
               <div>
                 <span className="text-gray-500">Target URL:</span>
                 <p className="font-medium text-gray-900 truncate">{url}</p>
@@ -232,6 +419,33 @@ const ReportExportModal: React.FC<ReportExportModalProps> = ({
                 <span className="text-gray-500">Issues Found:</span>
                 <p className="font-medium text-gray-900">{totalVulns} vulnerabilities</p>
               </div>
+              <div>
+                <span className="text-gray-500">URLs Scanned:</span>
+                <p className="font-medium text-gray-900">{scan.summary?.scan_info?.total_urls_scanned || 0}</p>
+              </div>
+              <div>
+                <span className="text-gray-500">Links Analyzed:</span>
+                <p className="font-medium text-gray-900">{scan.summary?.scan_info?.total_links_scanned || 0}</p>
+              </div>
+              <div>
+                <span className="text-gray-500">Forms Tested:</span>
+                <p className="font-medium text-gray-900">{scan.summary?.scan_info?.total_forms_scanned || 0}</p>
+              </div>
+              <div>
+                <span className="text-gray-500">Scan ID:</span>
+                <p className="font-medium text-gray-900 text-xs">{scan.summary?.scan_info?.scan_id || scan.id}</p>
+              </div>
+            </div>
+            <div className="border-t border-gray-200 pt-3">
+              <h4 className="font-medium text-gray-700 mb-2">Export will include:</h4>
+              <ul className="text-sm text-gray-600 space-y-1">
+                <li>• Complete vulnerability details with severity levels, payloads, and recommendations</li>
+                <li>• Performance metrics and scan statistics</li>
+                <li>• List of all scanned URLs, links, and forms</li>
+                <li>• Vulnerability breakdown by type and category</li>
+                <li>• Detailed remediation guidance for each finding</li>
+                <li>• Scan metadata and configuration information</li>
+              </ul>
             </div>
           </div>
 

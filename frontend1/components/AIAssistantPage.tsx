@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Bot, Send, MessageCircle, RefreshCw, FileText, AlertTriangle, Loader } from 'lucide-react';
 import { scanAPI } from '../lib/api';
 import { aiService } from '../lib/aiService';
-import { isAIConfigured } from '../lib/aiConfig';
 import { RecentScan, ScanResult } from '../types';
 import { formatTimestamp, cn } from '../lib/utils';
 
@@ -12,6 +11,164 @@ interface Message {
   content: string;
   timestamp: Date;
 }
+
+// Message content renderer with proper formatting
+const MessageContent: React.FC<{ content: string; type: 'user' | 'assistant' }> = ({ content, type }) => {
+  if (type === 'user') {
+    return <div className="whitespace-pre-wrap">{content}</div>;
+  }
+
+  // Helper function to parse markdown formatting within text
+  const parseMarkdown = (text: string) => {
+    const parts: React.ReactNode[] = [];
+    let lastIndex = 0;
+    let keyCounter = 0;
+
+    // Parse **bold** text
+    const boldRegex = /\*\*(.*?)\*\*/g;
+    let match;
+    
+    while ((match = boldRegex.exec(text)) !== null) {
+      // Add text before the match
+      if (match.index > lastIndex) {
+        parts.push(text.substring(lastIndex, match.index));
+      }
+      // Add the bold text
+      parts.push(
+        <strong key={`bold-${keyCounter++}`} className="font-semibold text-gray-900">
+          {match[1]}
+        </strong>
+      );
+      lastIndex = match.index + match[0].length;
+    }
+    
+    // Add remaining text
+    if (lastIndex < text.length) {
+      parts.push(text.substring(lastIndex));
+    }
+
+    return parts.length > 1 ? parts : text;
+  };
+
+  // Enhanced formatting for assistant messages
+  const formatContent = (text: string) => {
+    return text
+      .split('\n')
+      .map((line, index) => {
+        // Handle different types of formatting
+        
+        // Welcome message headers (lines with emojis)
+        if (line.match(/^(🤖|📊|🔍).*$/)) {
+          return (
+            <div key={index} className="font-bold text-blue-900 mb-3 text-base border-b border-blue-100 pb-1">
+              {parseMarkdown(line)}
+            </div>
+          );
+        }
+        
+        // Numbered section headers (e.g., "**1. Broken Access Control**")
+        if (line.match(/^\*\*\d+\.\s*.+\*\*/)) {
+          return (
+            <div key={index} className="font-bold text-red-800 mb-3 mt-4 text-lg bg-red-50 p-3 rounded-lg border-l-4 border-red-300">
+              {parseMarkdown(line)}
+            </div>
+          );
+        }
+        
+        // Subsection headers with asterisks (e.g., "* **Technical Details:**")
+        if (line.match(/^\*\s*\*\*[^:]+:\*\*/)) {
+          return (
+            <div key={index} className="font-semibold text-blue-800 mb-2 mt-3 ml-2 bg-blue-50 p-2 rounded border-l-3 border-blue-300">
+              {parseMarkdown(line)}
+            </div>
+          );
+        }
+        
+        // Bullet points with categories (enhanced styling for welcome message)
+        if (line.match(/^•\s*[^:]+:/)) {
+          const [category, ...description] = line.replace('• ', '').split(':');
+          return (
+            <div key={index} className="ml-3 mb-2 p-2 bg-blue-50 rounded-md border-l-3 border-blue-300">
+              <span className="text-blue-800">• </span>
+              <span className="font-semibold text-blue-900">{category}:</span>
+              <span className="text-gray-700 ml-1">{description.join(':')}</span>
+            </div>
+          );
+        }
+        
+        // Regular bullet points with asterisks (improved pattern matching)
+        if (line.match(/^\*\s/)) {
+          return (
+            <div key={index} className="ml-6 mb-2 text-gray-700 flex items-start">
+              <span className="text-blue-600 mr-2 mt-1 text-xs">●</span>
+              <span className="flex-1">{parseMarkdown(line.replace(/^\*\s/, ''))}</span>
+            </div>
+          );
+        }
+        
+        // Additional catch for any remaining asterisk bullets
+        if (line.startsWith('*') && !line.match(/^\*\*/) && line.includes(' ')) {
+          return (
+            <div key={index} className="ml-6 mb-2 text-gray-700 flex items-start">
+              <span className="text-blue-600 mr-2 mt-1 text-xs">●</span>
+              <span className="flex-1">{parseMarkdown(line.replace(/^\*\s*/, ''))}</span>
+            </div>
+          );
+        }
+        
+        // Regular bullet points with •
+        if (line.startsWith('• ')) {
+          return (
+            <div key={index} className="ml-4 mb-1 text-gray-700 flex items-start">
+              <span className="text-blue-600 mr-2 mt-1 text-xs">●</span>
+              <span className="flex-1">{parseMarkdown(line.replace('• ', ''))}</span>
+            </div>
+          );
+        }
+        
+        // Lines that start with bold text (likely section introductions)
+        if (line.match(/^\*\*[^*]+\*\*/)) {
+          // Special styling for recommendations or overall sections
+          if (line.toLowerCase().includes('recommendation') || line.toLowerCase().includes('overall')) {
+            return (
+              <div key={index} className="mb-3 mt-4 font-bold text-green-800 bg-green-50 p-3 rounded-lg border-l-4 border-green-300">
+                {parseMarkdown(line)}
+              </div>
+            );
+          }
+          // Regular bold section headers
+          return (
+            <div key={index} className="mb-3 mt-2 font-medium text-gray-800 bg-gray-50 p-2 rounded">
+              {parseMarkdown(line)}
+            </div>
+          );
+        }
+        
+        // Final call-to-action line
+        if (line.includes('Ask me anything') || line.includes('🛡️')) {
+          return (
+            <div key={index} className="font-semibold text-blue-700 mt-4 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+              {parseMarkdown(line)}
+            </div>
+          );
+        }
+        
+        // Regular lines with potential markdown
+        if (line.trim()) {
+          return (
+            <div key={index} className="mb-2 text-gray-700 leading-relaxed">
+              {parseMarkdown(line)}
+            </div>
+          );
+        }
+        
+        // Empty lines for spacing
+        return <div key={index} className="mb-2"></div>;
+      });
+  };
+
+  return <div className="space-y-1">{formatContent(content)}</div>;
+};
 
 interface AIAssistantPageProps {
   scans: RecentScan[];
@@ -48,22 +205,24 @@ export const AIAssistantPage: React.FC<AIAssistantPageProps> = ({ scans, onRefre
         const welcomeMessage: Message = {
           id: Date.now().toString(),
           type: 'assistant',
-          content: `🤖 **AI Security Assistant Ready**
+          content: `🤖 AI Security Assistant Ready
 
-I've loaded the scan results for **${response.results.summary?.scan_info?.target_url || 'the selected URL'}**. 
+I've successfully loaded the scan results for ${response.results.summary?.scan_info?.target_url || 'the selected URL'}.
 
-📊 **Scan Summary:**
-• Found ${response.results.vulnerabilities?.length || 0} vulnerabilities
-• Powered by Google Gemini AI for intelligent analysis
+📊 Scan Summary:
+• Total vulnerabilities found: ${response.results.vulnerabilities?.length || 0}
+• Analysis powered by Google Gemini AI
+• Ready for intelligent security consultation
 
-🔍 **I can help you with:**
-• **Vulnerability Analysis**: "What are the most critical vulnerabilities?"
-• **Risk Assessment**: "Explain the security risks found"
-• **Remediation Guidance**: "How do I fix the SQL injection issues?"
-• **Code Examples**: "Show me secure coding practices"
-• **Best Practices**: "What security improvements do you recommend?"
+🔍 I can help you with:
+• Vulnerability Analysis: Ask "What are the most critical vulnerabilities?"
+• Risk Assessment: Request "Explain the security risks found"
+• Remediation Guidance: Inquire "How do I fix the SQL injection issues?"
+• Code Examples: Ask "Show me secure coding practices"
+• Best Practices: Request "What security improvements do you recommend?"
+• Compliance: Ask "How do these findings relate to OWASP Top 10?"
 
-**Ask me anything about your security scan results!** 🛡️`,
+Ask me anything about your security scan results - I'm here to help! 🛡️`,
           timestamp: new Date()
         };
         
@@ -148,31 +307,11 @@ I've loaded the scan results for **${response.results.summary?.scan_info?.target
         <p className="text-gray-600">
           Select a recent scan and ask questions about vulnerabilities, security recommendations, and more.
         </p>
-        
-        {/* API Configuration Status */}
-        <div className={cn(
-          "mt-4 p-3 rounded-lg border text-sm",
-          isAIConfigured() 
-            ? "border-green-200 bg-green-50 text-green-800"
-            : "border-orange-200 bg-orange-50 text-orange-800"
-        )}>
-          {isAIConfigured() ? (
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-green-500"></div>
-              <span>✅ AI Assistant is configured and ready (Gemini API)</span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-orange-500"></div>
-              <span>⚠️ Add your Gemini API key to .env.local to enable full AI capabilities</span>
-            </div>
-          )}
-        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
         {/* Scan Selection Panel */}
-        <div className="lg:col-span-1">
+        <div className="xl:col-span-1">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
@@ -255,8 +394,8 @@ I've loaded the scan results for **${response.results.summary?.scan_info?.target
         </div>
 
         {/* Chat Interface */}
-        <div className="lg:col-span-2">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 h-[600px] flex flex-col">
+        <div className="xl:col-span-3">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 h-[calc(100vh-12rem)] max-h-[800px] min-h-[600px] flex flex-col">
             {/* Chat Header */}
             <div className="p-4 border-b border-gray-200">
               <div className="flex items-center gap-2">
@@ -292,7 +431,8 @@ I've loaded the scan results for **${response.results.summary?.scan_info?.target
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center">
                     <Loader className="h-8 w-8 text-blue-600 animate-spin mx-auto mb-4" />
-                    <p className="text-gray-500">Loading scan data...</p>
+                    <p className="text-gray-500 font-medium">Preparing AI Security Assistant...</p>
+                    <p className="text-sm text-gray-400 mt-1">Loading scan data and initializing analysis</p>
                   </div>
                 </div>
               ) : (
@@ -306,16 +446,16 @@ I've loaded the scan results for **${response.results.summary?.scan_info?.target
                   >
                     <div
                       className={cn(
-                        "max-w-[80%] rounded-lg px-4 py-2",
+                        "max-w-[85%] rounded-lg px-5 py-4 shadow-sm",
                         message.type === 'user'
                           ? "bg-blue-600 text-white"
-                          : "bg-gray-100 text-gray-900"
+                          : "bg-white text-gray-900 border border-gray-200"
                       )}
                     >
-                      <div className="whitespace-pre-wrap">{message.content}</div>
+                      <MessageContent content={message.content} type={message.type} />
                       <div
                         className={cn(
-                          "text-xs mt-1",
+                          "text-xs mt-2",
                           message.type === 'user' ? "text-blue-100" : "text-gray-500"
                         )}
                       >
@@ -362,9 +502,32 @@ I've loaded the scan results for **${response.results.summary?.scan_info?.target
                 </button>
               </div>
               
+              {/* Quick Action Suggestions */}
+              {selectedScanId && messages.length <= 1 && (
+                <div className="mt-3">
+                  <p className="text-xs text-gray-500 mb-2">💡 Quick suggestions:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      "What are the most critical vulnerabilities?",
+                      "How should I prioritize fixing these issues?",
+                      "Show me remediation steps",
+                      "Explain the security risks"
+                    ].map((suggestion) => (
+                      <button
+                        key={suggestion}
+                        onClick={() => setInputMessage(suggestion)}
+                        className="text-xs px-3 py-1 bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition-colors"
+                      >
+                        {suggestion}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
               <div className="mt-2 text-xs text-gray-500">
-                💡 <strong>Tip:</strong> You can ask about specific vulnerabilities, get remediation advice, 
-                or request security best practices based on your scan results.
+                💡 <strong>Tip:</strong> Ask specific questions about vulnerabilities, request remediation advice, 
+                or get security best practices based on your scan results.
               </div>
             </div>
           </div>

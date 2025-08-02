@@ -41,7 +41,7 @@ export const Header: React.FC<HeaderProps> = ({
           <nav className="flex space-x-8">
             {[
               { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
-              { id: 'scans', label: 'Recent Scans', icon: Clock },
+              { id: 'scans', label: 'All Scans', icon: Clock },
               { id: 'reports', label: 'Reports', icon: Bug },
               { id: 'assistant', label: 'AI Assistant', icon: Bot },
             ].map(({ id, label, icon: Icon }) => (

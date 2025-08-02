@@ -72,7 +72,7 @@ export const RecentScansSection: React.FC<RecentScansSectionProps> = ({
             <div className="flex items-center gap-2">
               <Clock className="h-5 w-5 text-primary-600" />
               <h3 className="text-lg font-semibold text-gray-900">
-                Recent Scans
+                All Scans
               </h3>
             </div>
             
