@@ -17,7 +17,6 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [scanResults, setScanResults] = useState<ScanResult | null>(null);
   const [recentScans, setRecentScans] = useState<RecentScan[]>([]);
-  const [dashboardRecentScans, setDashboardRecentScans] = useState<RecentScan[]>([]);
   const [selectedVulnerability, setSelectedVulnerability] = useState<Vulnerability | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [stats, setStats] = useState<SeverityStats>({
@@ -30,7 +29,6 @@ export default function Home() {
   // Load recent scans on component mount
   useEffect(() => {
     loadRecentScans();
-    loadDashboardRecentScans();
   }, []);
 
   // Update stats when scan results change
@@ -48,17 +46,6 @@ export default function Home() {
       }
     } catch (error) {
       console.error('Error loading recent scans:', error);
-    }
-  };
-
-  const loadDashboardRecentScans = async () => {
-    try {
-      const response = await scanAPI.getDashboardRecentScans();
-      if (response.success) {
-        setDashboardRecentScans(response.scans);
-      }
-    } catch (error) {
-      console.error('Error loading dashboard recent scans:', error);
     }
   };
 
@@ -110,9 +97,8 @@ export default function Home() {
         }
       }
       
-      // Refresh both recent scans lists to show the new completed scan
+      // Refresh recent scans list to show the new completed scan
       loadRecentScans();
-      loadDashboardRecentScans();
     }, 1000); // Wait 1 second for Firebase to be updated
   };
 
@@ -126,7 +112,6 @@ export default function Home() {
         if (results.success) {
           setScanResults(results.results);
           loadRecentScans(); // Refresh recent scans
-          loadDashboardRecentScans(); // Refresh dashboard recent scans
         }
       } catch (error) {
         console.error('Error loading scan results:', error);
@@ -179,18 +164,6 @@ export default function Home() {
     }
   };
 
-  const handleDashboardScanClick = async (scanId: string) => {
-    try {
-      const results = await scanAPI.getScanResults(scanId);
-      if (results.success) {
-        setScanResults(results.results);
-        // Stay on dashboard, don't switch tabs
-      }
-    } catch (error) {
-      console.error('Error loading historical scan from dashboard:', error);
-    }
-  };
-
   const handleAssistantScanClick = async (scanId: string) => {
     try {
       const results = await scanAPI.getScanResults(scanId);
@@ -233,18 +206,6 @@ export default function Home() {
 
               {/* Stats Section */}
               <StatsSection stats={stats} />
-
-              {/* Recent Scans Section on Dashboard */}
-              {dashboardRecentScans.length > 0 && (
-                <RecentScansSection
-                  scans={dashboardRecentScans}
-                  onScanClick={handleDashboardScanClick}
-                  onRefresh={loadDashboardRecentScans}
-                  className="mb-8"
-                  showTitle={true}
-                  maxItems={3}
-                />
-              )}
 
               {/* Charts Section */}
               {scanResults?.vulnerabilities && scanResults.vulnerabilities.length > 0 && (

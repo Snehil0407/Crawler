@@ -26,6 +26,95 @@ export const ScannerSection: React.FC<ScannerSectionProps> = ({
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Key for localStorage to persist scan state
+  const SCAN_STATE_KEY = 'websentinals_current_scan';
+
+  // Save current scan state to localStorage
+  const saveScanState = (scanData: {
+    url: string;
+    isScanning: boolean;
+    scanStatus: string;
+    progress: number;
+    currentScanId: string | null;
+    startTime: number;
+  }) => {
+    try {
+      localStorage.setItem(SCAN_STATE_KEY, JSON.stringify(scanData));
+    } catch (error) {
+      console.error('Failed to save scan state:', error);
+    }
+  };
+
+  // Load scan state from localStorage
+  const loadScanState = () => {
+    try {
+      const savedState = localStorage.getItem(SCAN_STATE_KEY);
+      if (savedState) {
+        const scanData = JSON.parse(savedState);
+        // Check if scan is not too old (more than 2 hours)
+        const maxAge = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
+        if (Date.now() - scanData.startTime < maxAge) {
+          return scanData;
+        } else {
+          // Remove old scan state
+          localStorage.removeItem(SCAN_STATE_KEY);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load scan state:', error);
+      localStorage.removeItem(SCAN_STATE_KEY);
+    }
+    return null;
+  };
+
+  // Clear saved scan state
+  const clearScanState = () => {
+    try {
+      localStorage.removeItem(SCAN_STATE_KEY);
+    } catch (error) {
+      console.error('Failed to clear scan state:', error);
+    }
+  };
+
+  // Restore scan state on component mount
+  React.useEffect(() => {
+    const savedScanState = loadScanState();
+    if (savedScanState && savedScanState.isScanning && savedScanState.currentScanId) {
+      setUrl(savedScanState.url);
+      setIsScanning(true);
+      setScanStatus(savedScanState.scanStatus || 'Resuming scan...');
+      setProgress(savedScanState.progress || 0);
+      setCurrentScanId(savedScanState.currentScanId);
+      
+      // Resume monitoring the scan
+      monitorScanProgress(savedScanState.currentScanId);
+      
+      // Notify parent component about the ongoing scan
+      onScanStart?.(savedScanState.currentScanId);
+    }
+  }, []);
+
+  // Save scan state whenever relevant state changes
+  React.useEffect(() => {
+    if (isScanning && currentScanId) {
+      saveScanState({
+        url,
+        isScanning,
+        scanStatus,
+        progress,
+        currentScanId,
+        startTime: Date.now() - (progress * 20000) // Approximate start time based on progress
+      });
+    }
+  }, [isScanning, currentScanId, scanStatus, progress, url]);
+
+  // Cleanup intervals on component unmount
+  React.useEffect(() => {
+    return () => {
+      clearAllIntervals();
+    };
+  }, []);
+
   const handleStartScan = async () => {
     if (!url.trim()) {
       alert('Please enter a valid URL');
@@ -46,6 +135,16 @@ export const ScannerSection: React.FC<ScannerSectionProps> = ({
       setCurrentScanId(result.scanId);
       onScanStart?.(result.scanId);
       
+      // Save scan state to localStorage
+      saveScanState({
+        url,
+        isScanning: true,
+        scanStatus: 'Initializing scan...',
+        progress: 10,
+        currentScanId: result.scanId,
+        startTime: Date.now()
+      });
+      
       // Start monitoring progress
       monitorScanProgress(result.scanId);
       
@@ -65,6 +164,7 @@ export const ScannerSection: React.FC<ScannerSectionProps> = ({
     try {
       await scanAPI.stopScan(currentScanId);
       clearAllIntervals();
+      clearScanState(); // Clear saved scan state
       setScanStatus('Scan stopped successfully');
       
       setTimeout(() => {
@@ -106,14 +206,18 @@ export const ScannerSection: React.FC<ScannerSectionProps> = ({
       'Finalizing scan results...'
     ];
 
-    let progressValue = 10;
+    let progressValue = progress || 10; // Use current progress if resuming
+    const scanStartTime = Date.now() - (progressValue * 20000); // Estimate start time
+    
     progressIntervalRef.current = setInterval(() => {
       if (progressValue < 90) {
         progressValue += Math.random() * 15;
-        setProgress(Math.min(progressValue, 90));
+        const newProgress = Math.min(progressValue, 90);
+        setProgress(newProgress);
         
-        const messageIndex = Math.floor((progressValue / 100) * messages.length);
-        setScanStatus(messages[Math.min(messageIndex, messages.length - 1)]);
+        const messageIndex = Math.floor((newProgress / 100) * messages.length);
+        const newStatus = messages[Math.min(messageIndex, messages.length - 1)];
+        setScanStatus(newStatus);
       }
     }, 2000);
 
@@ -124,6 +228,7 @@ export const ScannerSection: React.FC<ScannerSectionProps> = ({
         
         if (status.status === 'completed') {
           clearAllIntervals();
+          clearScanState(); // Clear saved scan state on completion
           setProgress(100);
           setScanStatus('Scan completed successfully!');
           
@@ -135,10 +240,12 @@ export const ScannerSection: React.FC<ScannerSectionProps> = ({
           }, 2000);
         } else if (status.status === 'failed') {
           clearAllIntervals();
+          clearScanState(); // Clear saved scan state on failure
           alert('Scan failed: ' + (status.error || 'Unknown error'));
           resetScanState();
         } else if (status.status === 'stopped') {
           clearAllIntervals();
+          clearScanState(); // Clear saved scan state when stopped
           setScanStatus('Scan was stopped');
           setTimeout(() => {
             resetScanState();
@@ -152,6 +259,7 @@ export const ScannerSection: React.FC<ScannerSectionProps> = ({
     // Timeout after 30 minutes
     timeoutRef.current = setTimeout(() => {
       clearAllIntervals();
+      clearScanState(); // Clear saved scan state on timeout
       if (isScanning) {
         alert('Scan timed out after 30 minutes. The scan may still be running in the background.');
         resetScanState();
@@ -161,6 +269,7 @@ export const ScannerSection: React.FC<ScannerSectionProps> = ({
 
   const resetScanState = () => {
     clearAllIntervals();
+    clearScanState(); // Clear saved scan state
     setIsScanning(false);
     setScanStatus('');
     setProgress(0);
