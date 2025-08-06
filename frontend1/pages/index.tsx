@@ -78,6 +78,44 @@ export default function Home() {
     setStats(newStats);
   };
 
+  const handleScanComplete = async (scanId: string) => {
+    console.log('Scan completed with ID:', scanId);
+    
+    // Wait a moment for the backend to finish saving results
+    setTimeout(async () => {
+      // Load the completed scan results with retry logic
+      let retries = 0;
+      const maxRetries = 3;
+      
+      const loadResultsWithRetry = async () => {
+        try {
+          const results = await scanAPI.getScanResults(scanId);
+          if (results.success) {
+            setScanResults(results.results);
+            return true;
+          }
+        } catch (error) {
+          console.error('Error loading completed scan results:', error);
+        }
+        return false;
+      };
+      
+      while (retries < maxRetries) {
+        const success = await loadResultsWithRetry();
+        if (success) break;
+        
+        retries++;
+        if (retries < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
+        }
+      }
+      
+      // Refresh both recent scans lists to show the new completed scan
+      loadRecentScans();
+      loadDashboardRecentScans();
+    }, 1000); // Wait 1 second for Firebase to be updated
+  };
+
   const handleScanStart = async (scanId: string) => {
     console.log('Scan started with ID:', scanId);
     
@@ -188,7 +226,10 @@ export default function Home() {
           {activeTab === 'dashboard' && (
             <>
               {/* Scanner Section */}
-              <ScannerSection onScanStart={handleScanStart} />
+              <ScannerSection 
+                onScanStart={handleScanStart} 
+                onScanComplete={handleScanComplete}
+              />
 
               {/* Stats Section */}
               <StatsSection stats={stats} />

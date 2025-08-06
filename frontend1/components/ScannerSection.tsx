@@ -5,11 +5,13 @@ import { isValidUrl, cn } from '../lib/utils';
 
 interface ScannerSectionProps {
   onScanStart?: (scanId: string) => void;
+  onScanComplete?: (scanId: string) => void;
   className?: string;
 }
 
 export const ScannerSection: React.FC<ScannerSectionProps> = ({ 
   onScanStart, 
+  onScanComplete,
   className 
 }) => {
   const [url, setUrl] = useState('');
@@ -124,6 +126,9 @@ export const ScannerSection: React.FC<ScannerSectionProps> = ({
           clearAllIntervals();
           setProgress(100);
           setScanStatus('Scan completed successfully!');
+          
+          // Notify parent component that scan is complete
+          onScanComplete?.(scanId);
           
           setTimeout(() => {
             resetScanState();

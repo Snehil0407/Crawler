@@ -49,9 +49,16 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     if (error.response?.status === 401 || error.response?.status === 403) {
-      // Token expired or unauthorized - redirect to login
-      if (typeof window !== 'undefined') {
-        window.location.href = '/login';
+      // Only redirect to login for critical auth endpoints, not all 401/403 errors
+      const url = error.config?.url || '';
+      const isCriticalAuthEndpoint = url.includes('/api/scans') || url.includes('/api/scan/') || url.includes('/api/start-scan');
+      
+      if (isCriticalAuthEndpoint && typeof window !== 'undefined') {
+        // Check if user is still authenticated before redirecting
+        const userData = localStorage.getItem('user');
+        if (!userData && !auth.currentUser) {
+          window.location.href = '/login';
+        }
       }
     }
     return Promise.reject(error);

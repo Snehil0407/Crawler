@@ -149,7 +149,10 @@ class FirebaseService:
             'summary': results['summary'],
             'vulnerabilities': results['vulnerabilities'],
             'scanned_links': results['scanned_links'],
-            'scanned_forms': results['scanned_forms']
+            'scanned_forms': results['scanned_forms'],
+            'scanned_urls': results.get('scanned_urls', []),
+            'status': 'completed',
+            'endTime': timestamp
         }
         
         # Save to Firebase
@@ -158,10 +161,10 @@ class FirebaseService:
             if not scan_id:
                 scan_id = str(uuid.uuid4())
                 
-            # Update the scan in Firebase
+            # Update the scan in Firebase (preserve existing fields like userId)
             scans_ref = self.db.child('scans')
             scan_ref = scans_ref.child(scan_id)
-            scan_ref.set(scan_data)
+            scan_ref.update(scan_data)  # Use update() instead of set() to preserve existing fields
             
             return {
                 'success': True,
