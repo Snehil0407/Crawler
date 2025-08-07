@@ -1,0 +1,11 @@
+export * from './Header';
+export * from './ScannerSection';
+export * from './StatsSection';
+export * from './ChartsSection';
+export * from './VulnerabilitiesSection';
+export * from './RecentScansSection';
+export * from './VulnerabilityModal';
+export * from './ReportsPage';
+export * from './AIAssistantPage';
+export * from './UserDropdown';
+export { default as ProtectedRoute } from './ProtectedRoute';

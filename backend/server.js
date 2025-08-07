@@ -53,6 +53,34 @@ function initializeFirebase() {
 // Initialize Firebase
 initializeFirebase();
 
+// Authentication middleware
+const authenticateToken = async (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+    if (!token) {
+        return res.status(401).json({ error: 'Access token required' });
+    }
+
+    // Handle demo user for testing
+    if (token === 'demo-token') {
+        req.user = {
+            uid: 'demo-user-id',
+            email: 'admin@websentinals.com'
+        };
+        return next();
+    }
+
+    try {
+        const decodedToken = await admin.auth().verifyIdToken(token);
+        req.user = decodedToken;
+        next();
+    } catch (error) {
+        console.error('Error verifying token:', error);
+        return res.status(403).json({ error: 'Invalid or expired token' });
+    }
+};
+
 // Get Firebase database reference
 const getDatabase = () => {
     if (!firebaseInitialized) {
@@ -82,9 +110,10 @@ app.get('/api/health', (req, res) => {
 });
 
 // Start scan endpoint
-app.post('/api/start-scan', async (req, res) => {
+app.post('/api/start-scan', authenticateToken, async (req, res) => {
     try {
         const { url } = req.body;
+        const userId = req.user.uid;
         
         if (!url) {
             return res.status(400).json({
@@ -106,7 +135,7 @@ app.post('/api/start-scan', async (req, res) => {
         const scanId = uuidv4();
         const timestamp = new Date().toISOString();
         
-        // Store scan metadata in Firebase
+        // Store scan metadata in Firebase with user association
         const db = getDatabase();
         const scanRef = db.ref(`scans/${scanId}`);
         
@@ -114,7 +143,9 @@ app.post('/api/start-scan', async (req, res) => {
             url: url,
             status: 'running',
             timestamp: timestamp,
-            progress: 0
+            progress: 0,
+            userId: userId, // Associate scan with user
+            userEmail: req.user.email || 'unknown'
         });
         
         console.log(`Starting scan for URL: ${url} with ID: ${scanId}`);
@@ -207,9 +238,10 @@ app.post('/api/start-scan', async (req, res) => {
 });
 
 // Get scan status endpoint
-app.get('/api/scan/:scanId/status', async (req, res) => {
+app.get('/api/scan/:scanId/status', authenticateToken, async (req, res) => {
     try {
         const { scanId } = req.params;
+        const userId = req.user.uid;
         
         const db = getDatabase();
         const scanRef = db.ref(`scans/${scanId}`);
@@ -219,6 +251,14 @@ app.get('/api/scan/:scanId/status', async (req, res) => {
         if (!scanData) {
             return res.status(404).json({
                 error: 'Scan not found',
+                success: false
+            });
+        }
+        
+        // Check if scan belongs to the user
+        if (scanData.userId !== userId) {
+            return res.status(403).json({
+                error: 'Access denied - scan belongs to another user',
                 success: false
             });
         }
@@ -241,9 +281,10 @@ app.get('/api/scan/:scanId/status', async (req, res) => {
 });
 
 // Get scan results endpoint
-app.get('/api/scan/:scanId/results', async (req, res) => {
+app.get('/api/scan/:scanId/results', authenticateToken, async (req, res) => {
     try {
         const { scanId } = req.params;
+        const userId = req.user.uid;
         
         const db = getDatabase();
         const scanRef = db.ref(`scans/${scanId}`);
@@ -253,6 +294,14 @@ app.get('/api/scan/:scanId/results', async (req, res) => {
         if (!scanData) {
             return res.status(404).json({
                 error: 'Scan not found',
+                success: false
+            });
+        }
+        
+        // Check if scan belongs to the user
+        if (scanData.userId !== userId) {
+            return res.status(403).json({
+                error: 'Access denied - scan belongs to another user',
                 success: false
             });
         }
@@ -273,13 +322,15 @@ app.get('/api/scan/:scanId/results', async (req, res) => {
     }
 });
 
-// List all scans endpoint
-app.get('/api/scans', async (req, res) => {
+// List all scans endpoint (user-specific)
+app.get('/api/scans', authenticateToken, async (req, res) => {
     try {
         const limit = parseInt(req.query.limit) || 10;
+        const userId = req.user.uid;
         
         const db = getDatabase();
-        const scansRef = db.ref('scans').orderByChild('timestamp').limitToLast(limit);
+        // Get all scans and filter by user
+        const scansRef = db.ref('scans').orderByChild('userId').equalTo(userId);
         const snapshot = await scansRef.once('value');
         const scans = snapshot.val() || {};
         
@@ -287,7 +338,8 @@ app.get('/api/scans', async (req, res) => {
         const scanArray = Object.entries(scans).map(([id, data]) => ({
             id,
             ...data
-        })).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        })).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+          .slice(0, limit); // Apply limit after sorting
         
         res.json({
             success: true,
@@ -297,6 +349,44 @@ app.get('/api/scans', async (req, res) => {
         
     } catch (error) {
         console.error('Error listing scans:', error);
+        res.status(500).json({
+            error: 'Internal server error',
+            message: error.message,
+            success: false
+        });
+    }
+});
+
+// Get recent scans for dashboard endpoint (user-specific)
+app.get('/api/dashboard/recent-scans', authenticateToken, async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 5;
+        const userId = req.user.uid;
+        
+        const db = getDatabase();
+        // Get user's scans and filter completed ones
+        const scansRef = db.ref('scans').orderByChild('userId').equalTo(userId);
+        const snapshot = await scansRef.once('value');
+        const scans = snapshot.val() || {};
+        
+        // Convert to array, filter completed scans, and sort by timestamp (newest first)
+        const scanArray = Object.entries(scans)
+            .map(([id, data]) => ({
+                id,
+                ...data
+            }))
+            .filter(scan => scan.status === 'completed')
+            .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+            .slice(0, limit);
+        
+        res.json({
+            success: true,
+            scans: scanArray,
+            count: scanArray.length
+        });
+        
+    } catch (error) {
+        console.error('Error listing recent scans for dashboard:', error);
         res.status(500).json({
             error: 'Internal server error',
             message: error.message,
@@ -366,6 +456,63 @@ app.get('/api/active-scans', (req, res) => {
         
     } catch (error) {
         console.error('Error getting active scans:', error);
+        res.status(500).json({
+            error: 'Internal server error',
+            message: error.message,
+            success: false
+        });
+    }
+});
+
+// Delete scan endpoint
+app.delete('/api/scan/:scanId', authenticateToken, async (req, res) => {
+    try {
+        const { scanId } = req.params;
+        const userId = req.user.uid;
+        
+        // Check if scan is currently active
+        if (activeScans.has(scanId)) {
+            return res.status(400).json({
+                error: 'Cannot delete active scan',
+                message: 'Please stop the scan before deleting it',
+                success: false
+            });
+        }
+        
+        const db = getDatabase();
+        const scanRef = db.ref(`scans/${scanId}`);
+        
+        // Check if scan exists
+        const snapshot = await scanRef.once('value');
+        if (!snapshot.exists()) {
+            return res.status(404).json({
+                error: 'Scan not found',
+                message: 'The specified scan does not exist',
+                success: false
+            });
+        }
+        
+        const scanData = snapshot.val();
+        
+        // Check if scan belongs to the user
+        if (scanData.userId !== userId) {
+            return res.status(403).json({
+                error: 'Access denied - scan belongs to another user',
+                success: false
+            });
+        }
+        
+        // Delete the scan from Firebase
+        await scanRef.remove();
+        
+        res.json({
+            success: true,
+            message: 'Scan deleted successfully',
+            scanId: scanId
+        });
+        
+    } catch (error) {
+        console.error('Error deleting scan:', error);
         res.status(500).json({
             error: 'Internal server error',
             message: error.message,

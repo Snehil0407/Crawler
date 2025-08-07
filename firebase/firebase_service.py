@@ -149,7 +149,10 @@ class FirebaseService:
             'summary': results['summary'],
             'vulnerabilities': results['vulnerabilities'],
             'scanned_links': results['scanned_links'],
-            'scanned_forms': results['scanned_forms']
+            'scanned_forms': results['scanned_forms'],
+            'scanned_urls': results.get('scanned_urls', []),
+            'status': 'completed',
+            'endTime': timestamp
         }
         
         # Save to Firebase
@@ -158,10 +161,10 @@ class FirebaseService:
             if not scan_id:
                 scan_id = str(uuid.uuid4())
                 
-            # Update the scan in Firebase
+            # Update the scan in Firebase (preserve existing fields like userId)
             scans_ref = self.db.child('scans')
             scan_ref = scans_ref.child(scan_id)
-            scan_ref.set(scan_data)
+            scan_ref.update(scan_data)  # Use update() instead of set() to preserve existing fields
             
             return {
                 'success': True,
@@ -240,4 +243,37 @@ class FirebaseService:
                 'success': False,
                 'error': str(e),
                 'message': 'Failed to update scan progress'
+            }
+    
+    def delete_scan(self, scan_id):
+        """Delete scan from Firebase"""
+        if not self.initialized:
+            self.initialize()
+            if not self.initialized:
+                return {
+                    'success': False,
+                    'message': 'Firebase not initialized'
+                }
+        
+        try:
+            scan_ref = self.db.child('scans').child(scan_id)
+            # Check if scan exists
+            scan_data = scan_ref.get()
+            if not scan_data:
+                return {
+                    'success': False,
+                    'message': 'Scan not found'
+                }
+            
+            # Delete the scan
+            scan_ref.delete()
+            return {
+                'success': True,
+                'message': 'Scan deleted successfully'
+            }
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'message': 'Failed to delete scan'
             }
