@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+import { getAnalytics } from 'firebase/analytics';
 
 const firebaseConfig = {
   apiKey: "AIzaSyCnRIKn4bhWE5pTEzpdQ2VJF73j4WEv_2w",
@@ -19,10 +20,18 @@ const app = initializeApp(firebaseConfig);
 // Initialize Firebase Authentication and get a reference to the service
 export const auth = getAuth(app);
 
-// Initialize Google Auth Provider
+// Initialize Google Auth Provider with basic configuration
 export const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({
+  prompt: 'select_account',
+  // Add proper scopes for Gmail access
+  hd: '', // Remove domain restriction initially for testing
+});
 
 // Initialize Firestore and get a reference to the service
 export const db = getFirestore(app);
+
+// Initialize Analytics (only in browser environment)
+export const analytics = typeof window !== 'undefined' ? getAnalytics(app) : null;
 
 export default app;

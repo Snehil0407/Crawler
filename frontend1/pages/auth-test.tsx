@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { auth, db } from '../lib/firebase';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { auth, db, googleProvider } from '../lib/firebase';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, signInWithPopup } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import { useRouter } from 'next/router';
@@ -13,7 +13,7 @@ const AuthTestPage: React.FC = () => {
   const [logs, setLogs] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   
-  const { user, login, register, logout, isAuthenticated } = useAuth();
+  const { user, login, register, logout, loginWithGoogle, registerWithGoogle, isAuthenticated } = useAuth();
   const router = useRouter();
 
   const addLog = (message: string, isError = false) => {
@@ -122,6 +122,78 @@ const AuthTestPage: React.FC = () => {
       
     } catch (error: any) {
       addLog(`Direct Firebase auth error: ${error.code} - ${error.message}`, true);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const testGoogleLogin = async () => {
+    setIsLoading(true);
+    addLog('=== Starting Google Login Test ===');
+    
+    try {
+      addLog('Calling AuthContext loginWithGoogle function...');
+      const success = await loginWithGoogle();
+
+      if (success) {
+        addLog('✨ Google login successful via AuthContext!');
+        addLog(`Current user: ${user?.email}`);
+        addLog(`Is authenticated: ${isAuthenticated}`);
+      } else {
+        addLog('Google login failed via AuthContext', true);
+      }
+    } catch (error: any) {
+      addLog(`Google login error: ${error.message}`, true);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const testGoogleRegister = async () => {
+    setIsLoading(true);
+    addLog('=== Starting Google Register Test ===');
+    
+    try {
+      addLog('Calling AuthContext registerWithGoogle function...');
+      const success = await registerWithGoogle();
+
+      if (success) {
+        addLog('✨ Google registration successful via AuthContext!');
+        addLog(`Current user: ${user?.email}`);
+        addLog(`Is authenticated: ${isAuthenticated}`);
+      } else {
+        addLog('Google registration failed via AuthContext', true);
+      }
+    } catch (error: any) {
+      addLog(`Google registration error: ${error.message}`, true);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const testDirectGoogleAuth = async () => {
+    setIsLoading(true);
+    addLog('=== Testing Direct Google Auth ===');
+    
+    try {
+      addLog('Testing Google provider configuration...');
+      addLog(`Google provider exists: ${!!googleProvider}`);
+      
+      addLog('Attempting direct Firebase signInWithPopup...');
+      const result = await signInWithPopup(auth, googleProvider);
+      addLog(`Direct Google auth successful: ${result.user.uid}`);
+      addLog(`User email: ${result.user.email}`);
+      addLog(`User display name: ${result.user.displayName}`);
+      
+    } catch (error: any) {
+      addLog(`Direct Google auth error: ${error.code} - ${error.message}`, true);
+      if (error.code === 'auth/unauthorized-domain') {
+        addLog('❗ Domain not authorized. Add your domain to Firebase console.', true);
+      } else if (error.code === 'auth/popup-blocked') {
+        addLog('❗ Popup blocked by browser. Please allow popups.', true);
+      } else if (error.code === 'auth/popup-closed-by-user') {
+        addLog('❗ User closed the popup window.', true);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -267,6 +339,30 @@ const AuthTestPage: React.FC = () => {
                 className="w-full bg-orange-500 text-white py-2 px-4 rounded hover:bg-orange-600 disabled:opacity-50"
               >
                 Test Direct Firebase Auth
+              </button>
+              
+              <button
+                onClick={testGoogleLogin}
+                disabled={isLoading}
+                className="w-full bg-red-500 text-white py-2 px-4 rounded hover:bg-red-600 disabled:opacity-50"
+              >
+                {isLoading ? 'Testing Google Login...' : 'Test Google Login'}
+              </button>
+              
+              <button
+                onClick={testGoogleRegister}
+                disabled={isLoading}
+                className="w-full bg-yellow-500 text-white py-2 px-4 rounded hover:bg-yellow-600 disabled:opacity-50"
+              >
+                {isLoading ? 'Testing Google Register...' : 'Test Google Register'}
+              </button>
+              
+              <button
+                onClick={testDirectGoogleAuth}
+                disabled={isLoading}
+                className="w-full bg-pink-500 text-white py-2 px-4 rounded hover:bg-pink-600 disabled:opacity-50"
+              >
+                Test Direct Google Auth
               </button>
               
               <button

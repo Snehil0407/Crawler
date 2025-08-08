@@ -19,13 +19,16 @@ const RegisterPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [showExistingAccountMessage, setShowExistingAccountMessage] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const router = useRouter();
   const { register, registerWithGoogle, isAuthenticated } = useAuth();
 
   // Redirect if already authenticated
   useEffect(() => {
+    console.log('Register page - Auth state check:', { isAuthenticated });
     if (isAuthenticated) {
+      console.log('User authenticated, redirecting to home...');
       router.push('/');
     }
   }, [isAuthenticated, router]);
@@ -75,6 +78,11 @@ const RegisterPage: React.FC = () => {
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
     }
+    // Clear the existing account message when user starts typing
+    if (showExistingAccountMessage) {
+      setShowExistingAccountMessage(false);
+      setErrors(prev => ({ ...prev, general: '' }));
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -86,6 +94,7 @@ const RegisterPage: React.FC = () => {
 
     setIsLoading(true);
     setErrors({}); // Clear previous errors
+    setShowExistingAccountMessage(false); // Clear existing account message
 
     try {
       console.log('Attempting registration...');
@@ -98,15 +107,22 @@ const RegisterPage: React.FC = () => {
       });
 
       if (success) {
-        console.log('Registration successful, redirecting...');
-        // Redirect to dashboard instead of login page
-        router.push('/');
+        console.log('Registration successful, waiting for auth state update...');
+        // Don't redirect here - let the useEffect handle it when isAuthenticated becomes true
       } else {
         setErrors({ general: 'Registration failed. Please try again.' });
       }
     } catch (err: any) {
       console.error('Registration error:', err);
-      setErrors({ general: err.message || 'An error occurred during registration. Please try again.' });
+      
+      // Check if it's an "already exists" error
+      if (err.message && err.message.includes('already have an account')) {
+        setShowExistingAccountMessage(true);
+        setErrors({ general: err.message });
+      } else {
+        setShowExistingAccountMessage(false);
+        setErrors({ general: err.message || 'An error occurred during registration. Please try again.' });
+      }
     } finally {
       setIsLoading(false);
     }
@@ -115,16 +131,27 @@ const RegisterPage: React.FC = () => {
   const handleGoogleSignUp = async () => {
     setIsGoogleLoading(true);
     setErrors({});
+    setShowExistingAccountMessage(false);
 
     try {
       const success = await registerWithGoogle();
       if (success) {
-        router.push('/');
+        // Don't redirect here - let the useEffect handle it when isAuthenticated becomes true
+        console.log('Google signup successful, waiting for auth state update...');
       } else {
         setErrors({ general: 'Google sign-up failed. Please try again.' });
       }
-    } catch (err) {
-      setErrors({ general: 'An error occurred during Google sign-up' });
+    } catch (err: any) {
+      console.error('Google sign-up error:', err);
+      
+      // Check if it's an "already exists" error
+      if (err.message && err.message.includes('already have an account')) {
+        setShowExistingAccountMessage(true);
+        setErrors({ general: err.message });
+      } else {
+        setShowExistingAccountMessage(false);
+        setErrors({ general: err.message || 'An error occurred during Google sign-up. Please try again.' });
+      }
     } finally {
       setIsGoogleLoading(false);
     }
@@ -152,8 +179,24 @@ const RegisterPage: React.FC = () => {
         <div className="bg-white dark:bg-gray-800 py-8 px-6 shadow-lg rounded-xl border border-gray-200 dark:border-gray-700">
           <form className="space-y-6" onSubmit={handleSubmit}>
             {errors.general && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-                {errors.general}
+              <div className={cn(
+                "px-4 py-3 rounded-lg text-sm border",
+                showExistingAccountMessage 
+                  ? "bg-blue-50 border-blue-200 text-blue-700" 
+                  : "bg-red-50 border-red-200 text-red-700"
+              )}>
+                <div className="flex items-start">
+                  <div className="flex-1">
+                    {errors.general}
+                    {showExistingAccountMessage && (
+                      <div className="mt-2">
+                        <Link href="/login" className="inline-flex items-center font-medium text-primary-600 hover:text-primary-500 underline">
+                          Go to Sign In page
+                        </Link>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
 

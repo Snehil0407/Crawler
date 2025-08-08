@@ -68,3 +68,68 @@ export function animateCounter(setValue: (value: number) => void, target: number
     setValue(Math.round(current));
   }, 50);
 }
+
+export function validateEmailDomain(email: string): { isValid: boolean; error?: string } {
+  // Check if email has a proper domain (not generic Gmail patterns)
+  const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+  
+  if (!emailPattern.test(email)) {
+    return { isValid: false, error: 'Please enter a valid email address.' };
+  }
+  
+  // Extract domain and local parts
+  const [localPart, domain] = email.split('@');
+  const localLower = localPart.toLowerCase();
+  const domainLower = domain.toLowerCase();
+  
+  // Block generic/demo patterns in local part
+  const blockedLocalPatterns = [
+    /^demo\d*$/,
+    /^test\d*$/,
+    /^example\d*$/,
+    /^sample\d*$/,
+    /^\d+$/,
+    /^[a-z]{1,3}\d+$/,
+    /^temp\d*$/,
+    /^fake\d*$/,
+    /^user\d*$/,
+    /^admin\d*$/
+  ];
+  
+  // Check if local part matches blocked patterns
+  for (const pattern of blockedLocalPatterns) {
+    if (pattern.test(localLower)) {
+      return { 
+        isValid: false, 
+        error: 'Access restricted. Please use a valid corporate or institutional email address. Generic email addresses are not allowed.' 
+      };
+    }
+  }
+  
+  // Special handling for Gmail - allow but with restrictions
+  if (domainLower === 'gmail.com') {
+    // Block obvious generic Gmail patterns
+    const genericGmailPatterns = [
+      /^demo\d*$/,
+      /^test\d*$/,
+      /^user\d*$/,
+      /^admin\d*$/,
+      /^sample\d*$/,
+      /^example\d*$/,
+      /^temp\d*$/,
+      /^fake\d*$/,
+      /^\d+$/
+    ];
+    
+    for (const pattern of genericGmailPatterns) {
+      if (pattern.test(localLower)) {
+        return { 
+          isValid: false, 
+          error: 'Access restricted. Please use a valid email address. Generic email addresses like demo123@gmail.com are not allowed.' 
+        };
+      }
+    }
+  }
+  
+  return { isValid: true };
+}

@@ -67,7 +67,7 @@ const LoginPage: React.FC = () => {
       }
     } catch (err: any) {
       console.error('Google sign-in error:', err);
-      setError(err.message || 'An error occurred during Google sign-in');
+      setError(err.message || 'An error occurred during Google sign-in. Please try again.');
     } finally {
       setIsGoogleLoading(false);
     }
