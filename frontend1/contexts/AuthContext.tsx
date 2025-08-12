@@ -6,9 +6,12 @@ import {
   signInWithPopup,
   signOut,
   onAuthStateChanged,
+  updatePassword,
+  reauthenticateWithCredential,
+  EmailAuthProvider,
   User as FirebaseUser
 } from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { auth, googleProvider, db } from '../lib/firebase';
 import { validateEmailDomain } from '../lib/utils';
 
@@ -32,6 +35,8 @@ interface AuthContextType {
   register: (userData: RegisterData) => Promise<boolean>;
   registerWithGoogle: () => Promise<boolean>;
   checkIfUserExists: (email: string) => Promise<boolean>;
+  updateUserProfile: (profileData: UpdateProfileData) => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
 }
 
 interface RegisterData {
@@ -40,6 +45,12 @@ interface RegisterData {
   email: string;
   company?: string;
   password: string;
+}
+
+interface UpdateProfileData {
+  firstName: string;
+  lastName: string;
+  company?: string;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -489,6 +500,88 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const updateUserProfile = async (profileData: UpdateProfileData): Promise<void> => {
+    try {
+      if (!user) {
+        throw new Error('No user is currently authenticated');
+      }
+
+      // Handle demo user
+      if (user.id === 'demo-user-id') {
+        const updatedUser = {
+          ...user,
+          ...profileData
+        };
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        setUser(updatedUser);
+        return;
+      }
+
+      // Update Firestore document
+      const userRef = doc(db, 'users', user.id);
+      await updateDoc(userRef, {
+        firstName: profileData.firstName,
+        lastName: profileData.lastName,
+        company: profileData.company || '',
+        updatedAt: new Date()
+      });
+
+      // Update local user state
+      setUser(prev => prev ? {
+        ...prev,
+        firstName: profileData.firstName,
+        lastName: profileData.lastName,
+        company: profileData.company || ''
+      } : null);
+
+      console.log('Profile updated successfully');
+    } catch (error: any) {
+      console.error('Profile update failed:', error);
+      throw new Error(error.message || 'Failed to update profile');
+    }
+  };
+
+  const changePassword = async (currentPassword: string, newPassword: string): Promise<void> => {
+    try {
+      const currentUser = auth.currentUser;
+      
+      if (!currentUser || !user) {
+        throw new Error('No user is currently authenticated');
+      }
+
+      // Don't allow password change for demo user
+      if (user.id === 'demo-user-id') {
+        throw new Error('Cannot change password for demo account');
+      }
+
+      // Don't allow password change for Google users
+      if (user.provider === 'google') {
+        throw new Error('Cannot change password for Google authenticated accounts');
+      }
+
+      // Re-authenticate user with current password
+      const credential = EmailAuthProvider.credential(currentUser.email!, currentPassword);
+      await reauthenticateWithCredential(currentUser, credential);
+
+      // Update password
+      await updatePassword(currentUser, newPassword);
+
+      console.log('Password changed successfully');
+    } catch (error: any) {
+      console.error('Password change failed:', error);
+      
+      if (error.code === 'auth/wrong-password') {
+        throw new Error('Current password is incorrect');
+      } else if (error.code === 'auth/weak-password') {
+        throw new Error('New password is too weak. Please choose a stronger password.');
+      } else if (error.code === 'auth/requires-recent-login') {
+        throw new Error('Please log out and log back in before changing your password');
+      } else {
+        throw new Error(error.message || 'Failed to change password');
+      }
+    }
+  };
+
   const value: AuthContextType = {
     user,
     isAuthenticated: !!user,
@@ -498,7 +591,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     logout,
     register,
     registerWithGoogle,
-    checkIfUserExists
+    checkIfUserExists,
+    updateUserProfile,
+    changePassword
   };
 
   return (

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { User, Settings, Sun, Moon, LogOut, ChevronDown } from 'lucide-react';
+import { useRouter } from 'next/router';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -7,6 +8,7 @@ import { useTheme } from '../contexts/ThemeContext';
 export const UserDropdown: React.FC = () => {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -129,7 +131,7 @@ export const UserDropdown: React.FC = () => {
               </div>
             </button>
 
-            {/* Additional Settings Placeholder */}
+            {/* Settings Button */}
             <button
               className={cn(
                 "w-full flex items-center space-x-3 px-3 py-2 text-sm rounded-md",
@@ -137,10 +139,13 @@ export const UserDropdown: React.FC = () => {
                 "hover:bg-gray-100 dark:hover:bg-gray-700",
                 "transition-colors duration-200"
               )}
-              onClick={() => setIsOpen(false)}
+              onClick={() => {
+                router.push('/settings');
+                setIsOpen(false);
+              }}
             >
               <Settings className="h-4 w-4" />
-              <span className="flex-1 text-left">Preferences</span>
+              <span className="flex-1 text-left">Settings</span>
             </button>
           </div>
 
