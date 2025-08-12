@@ -291,9 +291,14 @@ export const ScannerSection: React.FC<ScannerSectionProps> = ({
             <Rocket className="h-5 w-5 text-primary-600 dark:text-primary-400" />
             Start Vulnerability Scan
           </h2>
-          <p className="text-gray-600 dark:text-gray-400">
-            Enter your website URL to begin comprehensive security analysis
-          </p>
+          <div className="space-y-1">
+            <p className="text-gray-600 dark:text-gray-400">
+              Enter your website URL to begin comprehensive security analysis
+            </p>
+            <p className="text-red-600 dark:text-red-400 text-sm font-medium">
+              NOTE: DO NOT add / at the end of the URL (this may give false reports)
+            </p>
+          </div>
         </div>
 
         <div className="space-y-4">
