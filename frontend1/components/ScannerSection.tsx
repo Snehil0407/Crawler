@@ -296,7 +296,7 @@ export const ScannerSection: React.FC<ScannerSectionProps> = ({
               Enter your website URL to begin comprehensive security analysis
             </p>
             <p className="text-red-600 dark:text-red-400 text-sm font-medium">
-              NOTE: DO NOT add / at the end of the URL (this may give false reports)
+              NOTE: DO NOT ADD "/" AT THE END OF THE URL (THIS MAY GIVE FALSE REPORTS)
             </p>
           </div>
         </div>
