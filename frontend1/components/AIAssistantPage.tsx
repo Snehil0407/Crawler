@@ -1,26 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bot, Send, MessageCircle, RefreshCw, FileText, AlertTriangle, Loader, ChevronDown, Search, Copy, Check, Trash2, X, Menu } from 'lucide-react';
+import { Bot, Send, MessageCircle, RefreshCw, FileText, AlertTriangle, Loader, ChevronDown, Search, Copy, Check, Trash2, X, Menu, Settings } from 'lucide-react';
 import { scanAPI } from '../lib/api';
 import { aiService } from '../lib/aiService';
+import { conversationService, Message, ChatSession } from '../lib/conversationService';
+import { useAuth } from '../contexts/AuthContext';
 import { RecentScan, ScanResult } from '../types';
 import { formatTimestamp, cn } from '../lib/utils';
-
-interface Message {
-  id: string;
-  type: 'user' | 'assistant';
-  content: string;
-  timestamp: Date;
-}
-
-interface ChatSession {
-  id: string;
-  title: string;
-  scanId: string;
-  scanUrl: string;
-  messages: Message[];
-  createdAt: Date;
-  lastMessageAt: Date;
-}
+import ConversationDebugPanel from './ConversationDebugPanel';
 
 // Code block component with copy functionality
 const CodeBlock: React.FC<{ code: string; language?: string }> = ({ code, language = 'text' }) => {
@@ -252,6 +238,12 @@ interface AIAssistantPageProps {
 }
 
 export const AIAssistantPage: React.FC<AIAssistantPageProps> = ({ scans, onRefresh }) => {
+  const { user } = useAuth();
+  
+  // Initialize conversation service with current user
+  useEffect(() => {
+    conversationService.setCurrentUser(user);
+  }, [user]);
   const [selectedScanId, setSelectedScanId] = useState<string>('');
   const [selectedScanData, setSelectedScanData] = useState<ScanResult | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -264,60 +256,19 @@ export const AIAssistantPage: React.FC<AIAssistantPageProps> = ({ scans, onRefre
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [showDebugPanel, setShowDebugPanel] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
 
-  // Chat history management
-  const CHAT_SESSIONS_KEY = 'ai_assistant_chat_sessions';
-
-  const loadChatSessions = (): ChatSession[] => {
-    try {
-      const saved = localStorage.getItem(CHAT_SESSIONS_KEY);
-      if (saved) {
-        const sessions = JSON.parse(saved);
-        // Convert date strings back to Date objects
-        return sessions.map((session: any) => ({
-          ...session,
-          createdAt: new Date(session.createdAt),
-          lastMessageAt: new Date(session.lastMessageAt),
-          messages: session.messages.map((msg: any) => ({
-            ...msg,
-            timestamp: new Date(msg.timestamp)
-          }))
-        }));
-      }
-      return [];
-    } catch (error) {
-      console.error('Error loading chat sessions:', error);
-      return [];
-    }
-  };
-
-  const saveChatSessions = (sessions: ChatSession[]) => {
-    try {
-      localStorage.setItem(CHAT_SESSIONS_KEY, JSON.stringify(sessions));
-    } catch (error) {
-      console.error('Error saving chat sessions:', error);
-    }
-  };
-
   const createNewChatSession = (scanId: string, scanUrl: string, initialMessages: Message[]): ChatSession => {
-    const newSession: ChatSession = {
-      id: Date.now().toString(),
-      title: `Chat with ${scanUrl}`,
-      scanId,
-      scanUrl,
-      messages: initialMessages,
-      createdAt: new Date(),
-      lastMessageAt: new Date()
-    };
-    
-    const updatedSessions = [newSession, ...chatSessions];
-    setChatSessions(updatedSessions);
-    saveChatSessions(updatedSessions);
+    const newSession = conversationService.createNewSession(scanId, scanUrl, initialMessages);
     setCurrentSessionId(newSession.id);
+    
+    // Update local state
+    const updatedSessions = conversationService.loadChatSessions();
+    setChatSessions(updatedSessions);
     
     return newSession;
   };
@@ -325,22 +276,15 @@ export const AIAssistantPage: React.FC<AIAssistantPageProps> = ({ scans, onRefre
   const updateCurrentSession = (newMessages: Message[]) => {
     if (!currentSessionId) return;
     
-    const updatedSessions = chatSessions.map(session => 
-      session.id === currentSessionId
-        ? {
-            ...session,
-            messages: newMessages,
-            lastMessageAt: new Date()
-          }
-        : session
-    );
+    conversationService.updateSession(currentSessionId, { messages: newMessages });
     
+    // Update local state
+    const updatedSessions = conversationService.loadChatSessions();
     setChatSessions(updatedSessions);
-    saveChatSessions(updatedSessions);
   };
 
   const loadChatSession = (sessionId: string) => {
-    const session = chatSessions.find(s => s.id === sessionId);
+    const session = conversationService.getSession(sessionId);
     if (session) {
       setCurrentSessionId(sessionId);
       setSelectedScanId(session.scanId);
@@ -353,53 +297,26 @@ export const AIAssistantPage: React.FC<AIAssistantPageProps> = ({ scans, onRefre
   };
 
   const deleteChatSession = (sessionId: string) => {
-    const updatedSessions = chatSessions.filter(session => session.id !== sessionId);
-    setChatSessions(updatedSessions);
-    saveChatSessions(updatedSessions);
+    const success = conversationService.deleteSession(sessionId);
     
-    // If we're deleting the current session, clear the chat
-    if (currentSessionId === sessionId) {
-      setCurrentSessionId(null);
-      setMessages([]);
-      setSelectedScanId('');
-      setSelectedScanData(null);
-    }
-  };
-
-  const generateSessionTitle = (messages: Message[], scanUrl?: string): string => {
-    // Find the first user message to create a meaningful title
-    const firstUserMessage = messages.find(msg => msg.type === 'user');
-    if (firstUserMessage) {
-      const content = firstUserMessage.content.trim();
-      // Create more meaningful titles based on the content
-      if (content.toLowerCase().includes('vulnerability') || content.toLowerCase().includes('vulnerabilities')) {
-        return 'Vulnerability Analysis';
-      } else if (content.toLowerCase().includes('remediation') || content.toLowerCase().includes('fix')) {
-        return 'Remediation Guide';
-      } else if (content.toLowerCase().includes('report') || content.toLowerCase().includes('summary')) {
-        return 'Security Report';
-      } else if (content.toLowerCase().includes('critical') || content.toLowerCase().includes('priority')) {
-        return 'Critical Issues';
-      } else if (content.length > 35) {
-        return content.substring(0, 35) + '...';
-      }
-      return content;
-    }
-    // Fallback with scan URL if available
-    if (scanUrl) {
-      try {
-        const url = new URL(scanUrl);
-        return `Analysis: ${url.hostname}`;
-      } catch {
-        return 'Security Analysis';
+    if (success) {
+      // Update local state
+      const updatedSessions = conversationService.loadChatSessions();
+      setChatSessions(updatedSessions);
+      
+      // If we're deleting the current session, clear the chat
+      if (currentSessionId === sessionId) {
+        setCurrentSessionId(null);
+        setMessages([]);
+        setSelectedScanId('');
+        setSelectedScanData(null);
       }
     }
-    return 'New Chat';
   };
 
   // Load chat sessions on component mount
   useEffect(() => {
-    const sessions = loadChatSessions();
+    const sessions = conversationService.loadChatSessions();
     setChatSessions(sessions);
   }, []);
 
@@ -407,21 +324,8 @@ export const AIAssistantPage: React.FC<AIAssistantPageProps> = ({ scans, onRefre
   useEffect(() => {
     if (currentSessionId && messages.length > 0) {
       updateCurrentSession(messages);
-      
-      // Update session title if it's still the default
-      const currentSession = chatSessions.find(s => s.id === currentSessionId);
-      if (currentSession && currentSession.title.startsWith('Chat with')) {
-        const newTitle = generateSessionTitle(messages, currentSession.scanUrl);
-        const updatedSessions = chatSessions.map(session => 
-          session.id === currentSessionId
-            ? { ...session, title: newTitle }
-            : session
-        );
-        setChatSessions(updatedSessions);
-        saveChatSessions(updatedSessions);
-      }
     }
-  }, [messages, currentSessionId, chatSessions]);
+  }, [messages, currentSessionId]);
 
   // Close sidebar when clicking outside
   useEffect(() => {
@@ -506,7 +410,7 @@ Ask me anything about your security scan results - I'm here to help! 🛡️`,
     if (!inputMessage.trim() || !selectedScanData) return;
 
     const userMessage: Message = {
-      id: Date.now().toString(),
+      id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       type: 'user',
       content: inputMessage,
       timestamp: new Date()
@@ -519,6 +423,12 @@ Ask me anything about your security scan results - I'm here to help! 🛡️`,
     if (!currentSessionId && updatedMessages.length === 2) { // 1 welcome + 1 user message
       const scanUrl = selectedScanData?.summary?.scan_info?.target_url || 'Unknown URL';
       createNewChatSession(selectedScanId, scanUrl, updatedMessages);
+    } else if (currentSessionId) {
+      // Add message to existing session
+      conversationService.addMessageToSession(currentSessionId, userMessage);
+      // Update local chat sessions state
+      const updatedSessions = conversationService.loadChatSessions();
+      setChatSessions(updatedSessions);
     }
     
     const currentMessage = inputMessage;
@@ -530,7 +440,7 @@ Ask me anything about your security scan results - I'm here to help! 🛡️`,
       const response = await aiService.analyzeScan(selectedScanData, currentMessage);
       
       const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
+        id: `msg_${Date.now() + 1}_${Math.random().toString(36).substr(2, 9)}`,
         type: 'assistant',
         content: response.message,
         timestamp: new Date()
@@ -539,8 +449,14 @@ Ask me anything about your security scan results - I'm here to help! 🛡️`,
       const finalMessages = [...updatedMessages, assistantMessage];
       setMessages(finalMessages);
       
-      // Create session if this is the first exchange and we haven't created one yet
-      if (!currentSessionId) {
+      // Add assistant message to session
+      if (currentSessionId) {
+        conversationService.addMessageToSession(currentSessionId, assistantMessage);
+        // Update local chat sessions state
+        const updatedSessions = conversationService.loadChatSessions();
+        setChatSessions(updatedSessions);
+      } else {
+        // Create session if this is the first exchange and we haven't created one yet
         const scanUrl = selectedScanData?.summary?.scan_info?.target_url || 'Unknown URL';
         createNewChatSession(selectedScanId, scanUrl, finalMessages);
       }
@@ -549,7 +465,7 @@ Ask me anything about your security scan results - I'm here to help! 🛡️`,
       console.error('Error sending message:', error);
       
       const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
+        id: `msg_${Date.now() + 2}_${Math.random().toString(36).substr(2, 9)}`,
         type: 'assistant',
         content: 'I apologize, but I encountered an error processing your request. Please try again or check your API configuration.',
         timestamp: new Date()
@@ -558,8 +474,14 @@ Ask me anything about your security scan results - I'm here to help! 🛡️`,
       const finalMessages = [...updatedMessages, errorMessage];
       setMessages(finalMessages);
       
-      // Create session even for errors if this is the first exchange
-      if (!currentSessionId) {
+      // Add error message to session
+      if (currentSessionId) {
+        conversationService.addMessageToSession(currentSessionId, errorMessage);
+        // Update local chat sessions state
+        const updatedSessions = conversationService.loadChatSessions();
+        setChatSessions(updatedSessions);
+      } else {
+        // Create session even for errors if this is the first exchange
         const scanUrl = selectedScanData?.summary?.scan_info?.target_url || 'Unknown URL';
         createNewChatSession(selectedScanId, scanUrl, finalMessages);
       }
@@ -592,6 +514,13 @@ Ask me anything about your security scan results - I'm here to help! 🛡️`,
           {/* Sidebar Header */}
           <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Chat History</h2>
+            <button
+              onClick={() => setShowDebugPanel(true)}
+              className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              title="Debug conversations"
+            >
+              <Settings className="h-4 w-4" />
+            </button>
           </div>
 
           {/* New Chat Button */}
@@ -975,6 +904,12 @@ Ask me anything about your security scan results - I'm here to help! 🛡️`,
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
+
+      {/* Conversation Debug Panel */}
+      <ConversationDebugPanel 
+        isOpen={showDebugPanel} 
+        onClose={() => setShowDebugPanel(false)} 
+      />
     </div>
   );
 };

@@ -790,57 +790,8 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
     }
   };
 
-  const totalReports = scans.length;
-  const totalVulnerabilities = scans.reduce((sum, scan) => 
-    sum + (scan.summary?.scan_info?.total_vulnerabilities || 0), 0
-  );
-
   return (
     <div className={cn("space-y-6", className)}>
-      {/* Header Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Reports</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{totalReports}</p>
-            </div>
-            <div className="bg-primary-50 dark:bg-primary-900/20 p-3 rounded-lg">
-              <FileText className="h-6 w-6 text-primary-600 dark:text-primary-400" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Issues Found</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{totalVulnerabilities}</p>
-            </div>
-            <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg">
-              <Bug className="h-6 w-6 text-red-600 dark:text-red-400" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Average Scan Time</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                {scans.length > 0 
-                  ? Math.round(scans.reduce((sum, scan) => 
-                      sum + (scan.summary?.scan_info?.duration || 0), 0
-                    ) / scans.length)
-                  : 0}s
-              </p>
-            </div>
-            <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
-              <Clock className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* Filters */}
       <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">

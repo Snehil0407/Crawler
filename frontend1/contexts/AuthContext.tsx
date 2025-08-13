@@ -68,6 +68,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
+  // Clear any leftover session flags on initial load
+  useEffect(() => {
+    // Only clear if there's no valid demo user data
+    const userData = localStorage.getItem('user');
+    const hasActiveSession = sessionStorage.getItem('userLoggedIn') === 'true';
+    
+    if (!hasActiveSession || !userData) {
+      sessionStorage.removeItem('userLoggedIn');
+      if (userData) {
+        try {
+          const user = JSON.parse(userData);
+          if (user.id !== 'demo-user-id') {
+            localStorage.removeItem('user');
+          }
+        } catch (error) {
+          localStorage.removeItem('user');
+        }
+      }
+    }
+  }, []);
+
   // Helper function to create user document in Firestore
   const createUserDocument = async (firebaseUser: FirebaseUser, additionalData: any = {}) => {
     const userRef = doc(db, 'users', firebaseUser.uid);
@@ -166,8 +187,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       console.log('Auth state changed. Firebase user:', firebaseUser?.email || 'None');
       
-      if (firebaseUser) {
-        console.log('Firebase user authenticated, getting user data...');
+      // Only auto-authenticate if user was previously authenticated in this session
+      // Check if user was already logged in (has active session flag)
+      const hasActiveSession = sessionStorage.getItem('userLoggedIn') === 'true';
+      
+      if (firebaseUser && hasActiveSession) {
+        console.log('Firebase user authenticated with active session, getting user data...');
         const userData = await getUserData(firebaseUser);
         
         if (userData) {
@@ -177,28 +202,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.error('Failed to get user data, but Firebase user exists. This should not happen with new fallback logic.');
           setUser(null);
         }
+      } else if (firebaseUser && !hasActiveSession) {
+        console.log('Firebase user found but no active session flag, signing out...');
+        // User might have been auto-signed in by Firebase, but we want explicit login
+        await signOut(auth);
+        setUser(null);
       } else {
         console.log('No Firebase user, checking for demo user...');
-        // Check for demo user in localStorage
-        const userData = localStorage.getItem('user');
-        if (userData) {
-          try {
-            const user = JSON.parse(userData);
-            if (user.id === 'demo-user-id') {
-              console.log('Demo user found in localStorage');
-              setUser(user);
-            } else {
-              console.log('Invalid user data in localStorage, clearing...');
+        // Check for demo user in localStorage only if there's an active session
+        if (hasActiveSession) {
+          const userData = localStorage.getItem('user');
+          if (userData) {
+            try {
+              const user = JSON.parse(userData);
+              if (user.id === 'demo-user-id') {
+                console.log('Demo user found in localStorage with active session');
+                setUser(user);
+              } else {
+                console.log('Invalid user data in localStorage, clearing...');
+                localStorage.removeItem('user');
+                sessionStorage.removeItem('userLoggedIn');
+                setUser(null);
+              }
+            } catch (error) {
+              console.error('Error parsing user data from localStorage:', error);
               localStorage.removeItem('user');
+              sessionStorage.removeItem('userLoggedIn');
               setUser(null);
             }
-          } catch (error) {
-            console.error('Error parsing user data from localStorage:', error);
-            localStorage.removeItem('user');
+          } else {
+            console.log('No user data found, clearing session');
+            sessionStorage.removeItem('userLoggedIn');
             setUser(null);
           }
         } else {
-          console.log('No user found anywhere, setting to null');
+          console.log('No active session, user must log in explicitly');
           setUser(null);
         }
       }
@@ -223,6 +261,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           provider: 'email'
         };
         localStorage.setItem('user', JSON.stringify(demoUser));
+        sessionStorage.setItem('userLoggedIn', 'true');
         setUser(demoUser);
         console.log('Demo user login successful');
         return true;
@@ -263,6 +302,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       
       setUser(userData);
+      sessionStorage.setItem('userLoggedIn', 'true');
       console.log('Login successful, user data set:', userData);
       return true;
     } catch (error: any) {
@@ -318,6 +358,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log('User data retrieved:', userData);
       
       setUser(userData);
+      sessionStorage.setItem('userLoggedIn', 'true');
       console.log('Google authentication completed successfully');
       return true;
     } catch (error: any) {
@@ -367,6 +408,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log('User data retrieved:', newUser);
       
       setUser(newUser);
+      sessionStorage.setItem('userLoggedIn', 'true');
       return true;
     } catch (error: any) {
       console.error('Registration failed:', error);
@@ -422,6 +464,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.log('Existing user data retrieved:', userData);
         
         setUser(userData);
+        sessionStorage.setItem('userLoggedIn', 'true');
         console.log('Existing user logged in successfully via signup flow');
         return true;
       }
@@ -434,6 +477,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log('User data retrieved for registration:', userData);
       
       setUser(userData);
+      sessionStorage.setItem('userLoggedIn', 'true');
       console.log('Google registration completed successfully');
       return true;
     } catch (error: any) {
@@ -486,6 +530,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Check if it's a demo user
       if (user?.id === 'demo-user-id') {
         localStorage.removeItem('user');
+        sessionStorage.removeItem('userLoggedIn');
         setUser(null);
         router.push('/login');
         return;
@@ -493,6 +538,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Firebase logout
       await signOut(auth);
+      sessionStorage.removeItem('userLoggedIn');
       setUser(null);
       router.push('/login');
     } catch (error) {
