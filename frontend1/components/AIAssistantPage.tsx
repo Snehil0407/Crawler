@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bot, Send, MessageCircle, RefreshCw, FileText, AlertTriangle, Loader, ChevronDown, Search, Copy, Check, Trash2, X, Menu, Settings } from 'lucide-react';
+import { Bot, Send, MessageCircle, RefreshCw, FileText, AlertTriangle, Loader, ChevronDown, Search, Copy, Check, Trash2, X, Menu } from 'lucide-react';
 import { scanAPI } from '../lib/api';
 import { aiService } from '../lib/aiService';
 import { conversationService, Message, ChatSession } from '../lib/conversationService';
 import { useAuth } from '../contexts/AuthContext';
 import { RecentScan, ScanResult } from '../types';
 import { formatTimestamp, cn } from '../lib/utils';
-import ConversationDebugPanel from './ConversationDebugPanel';
 
 // Code block component with copy functionality
 const CodeBlock: React.FC<{ code: string; language?: string }> = ({ code, language = 'text' }) => {
@@ -256,7 +255,6 @@ export const AIAssistantPage: React.FC<AIAssistantPageProps> = ({ scans, onRefre
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [showDebugPanel, setShowDebugPanel] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -271,16 +269,6 @@ export const AIAssistantPage: React.FC<AIAssistantPageProps> = ({ scans, onRefre
     setChatSessions(updatedSessions);
     
     return newSession;
-  };
-
-  const updateCurrentSession = (newMessages: Message[]) => {
-    if (!currentSessionId) return;
-    
-    conversationService.updateSession(currentSessionId, { messages: newMessages });
-    
-    // Update local state
-    const updatedSessions = conversationService.loadChatSessions();
-    setChatSessions(updatedSessions);
   };
 
   const loadChatSession = (sessionId: string) => {
@@ -319,13 +307,6 @@ export const AIAssistantPage: React.FC<AIAssistantPageProps> = ({ scans, onRefre
     const sessions = conversationService.loadChatSessions();
     setChatSessions(sessions);
   }, []);
-
-  // Update session messages when messages change
-  useEffect(() => {
-    if (currentSessionId && messages.length > 0) {
-      updateCurrentSession(messages);
-    }
-  }, [messages, currentSessionId]);
 
   // Close sidebar when clicking outside
   useEffect(() => {
@@ -419,11 +400,13 @@ Ask me anything about your security scan results - I'm here to help! 🛡️`,
     const updatedMessages = [...messages, userMessage];
     setMessages(updatedMessages);
     
-    // Create new session if this is the first message in a new chat
-    if (!currentSessionId && updatedMessages.length === 2) { // 1 welcome + 1 user message
+    // Create new session if this is the first user message in a new chat
+    let sessionId = currentSessionId;
+    if (!currentSessionId) {
       const scanUrl = selectedScanData?.summary?.scan_info?.target_url || 'Unknown URL';
-      createNewChatSession(selectedScanId, scanUrl, updatedMessages);
-    } else if (currentSessionId) {
+      const newSession = createNewChatSession(selectedScanId, scanUrl, updatedMessages);
+      sessionId = newSession.id;
+    } else {
       // Add message to existing session
       conversationService.addMessageToSession(currentSessionId, userMessage);
       // Update local chat sessions state
@@ -449,16 +432,12 @@ Ask me anything about your security scan results - I'm here to help! 🛡️`,
       const finalMessages = [...updatedMessages, assistantMessage];
       setMessages(finalMessages);
       
-      // Add assistant message to session
-      if (currentSessionId) {
-        conversationService.addMessageToSession(currentSessionId, assistantMessage);
+      // Add assistant message to the session
+      if (sessionId) {
+        conversationService.addMessageToSession(sessionId, assistantMessage);
         // Update local chat sessions state
         const updatedSessions = conversationService.loadChatSessions();
         setChatSessions(updatedSessions);
-      } else {
-        // Create session if this is the first exchange and we haven't created one yet
-        const scanUrl = selectedScanData?.summary?.scan_info?.target_url || 'Unknown URL';
-        createNewChatSession(selectedScanId, scanUrl, finalMessages);
       }
       
     } catch (error) {
@@ -475,15 +454,11 @@ Ask me anything about your security scan results - I'm here to help! 🛡️`,
       setMessages(finalMessages);
       
       // Add error message to session
-      if (currentSessionId) {
-        conversationService.addMessageToSession(currentSessionId, errorMessage);
+      if (sessionId) {
+        conversationService.addMessageToSession(sessionId, errorMessage);
         // Update local chat sessions state
         const updatedSessions = conversationService.loadChatSessions();
         setChatSessions(updatedSessions);
-      } else {
-        // Create session even for errors if this is the first exchange
-        const scanUrl = selectedScanData?.summary?.scan_info?.target_url || 'Unknown URL';
-        createNewChatSession(selectedScanId, scanUrl, finalMessages);
       }
       
     } finally {
@@ -514,13 +489,6 @@ Ask me anything about your security scan results - I'm here to help! 🛡️`,
           {/* Sidebar Header */}
           <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Chat History</h2>
-            <button
-              onClick={() => setShowDebugPanel(true)}
-              className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-              title="Debug conversations"
-            >
-              <Settings className="h-4 w-4" />
-            </button>
           </div>
 
           {/* New Chat Button */}
@@ -904,12 +872,6 @@ Ask me anything about your security scan results - I'm here to help! 🛡️`,
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
-
-      {/* Conversation Debug Panel */}
-      <ConversationDebugPanel 
-        isOpen={showDebugPanel} 
-        onClose={() => setShowDebugPanel(false)} 
-      />
     </div>
   );
 };
