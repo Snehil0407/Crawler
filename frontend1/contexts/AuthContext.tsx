@@ -92,25 +92,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Helper function to create user document in Firestore
   const createUserDocument = async (firebaseUser: FirebaseUser, additionalData: any = {}) => {
     const userRef = doc(db, 'users', firebaseUser.uid);
-    const userDoc = await getDoc(userRef);
-
-    if (!userDoc.exists()) {
-      const { displayName, email } = firebaseUser;
-      const [firstName, lastName] = displayName?.split(' ') || ['', ''];
+    
+    try {
+      // Check if document already exists
+      const userDoc = await getDoc(userRef);
       
-      try {
-        await setDoc(userRef, {
+      if (!userDoc.exists()) {
+        const { displayName, email } = firebaseUser;
+        const [firstName, lastName] = displayName?.split(' ') || ['', ''];
+        
+        const userData = {
           firstName: additionalData.firstName || firstName || '',
           lastName: additionalData.lastName || lastName || '',
-          email,
+          email: email || '',
           company: additionalData.company || '',
           provider: additionalData.provider || 'email',
           createdAt: new Date(),
           ...additionalData
-        });
-      } catch (error) {
-        console.error('Error creating user document:', error);
+        };
+        
+        console.log('Creating user document for:', firebaseUser.uid, userData);
+        await setDoc(userRef, userData);
+        console.log('User document created successfully');
+      } else {
+        console.log('User document already exists for:', firebaseUser.uid);
       }
+    } catch (error) {
+      console.error('Error creating user document:', error);
+      // Don't throw the error - let the app continue with a fallback user object
     }
 
     return userRef;
@@ -120,6 +129,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const getUserData = async (firebaseUser: FirebaseUser): Promise<User | null> => {
     try {
       console.log('Getting user data for:', firebaseUser.uid);
+      
+      // Add a small delay to ensure Firestore document is ready
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       const userRef = doc(db, 'users', firebaseUser.uid);
       const userDoc = await getDoc(userRef);
       
@@ -133,7 +146,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           lastName: userData.lastName || '',
           company: userData.company || '',
           provider: userData.provider || 'email',
-          createdAt: userData.createdAt?.toDate()
+          createdAt: userData.createdAt?.toDate ? userData.createdAt.toDate() : new Date()
         };
       } else {
         console.log('No user document found for:', firebaseUser.uid);
@@ -150,18 +163,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           createdAt: new Date()
         };
         
-        // Try to create the user document for future logins
-        try {
-          await createUserDocument(firebaseUser, {
-            firstName: fallbackUser.firstName,
-            lastName: fallbackUser.lastName,
-            company: fallbackUser.company,
-            provider: fallbackUser.provider
-          });
-          console.log('User document created successfully');
-        } catch (docError) {
+        // Try to create the user document for future logins (non-blocking)
+        createUserDocument(firebaseUser, {
+          firstName: fallbackUser.firstName,
+          lastName: fallbackUser.lastName,
+          company: fallbackUser.company,
+          provider: fallbackUser.provider
+        }).catch(docError => {
           console.warn('Could not create user document, continuing with fallback:', docError);
-        }
+        });
         
         return fallbackUser;
       }
@@ -176,7 +186,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         firstName: firebaseUser.displayName?.split(' ')[0] || 'User',
         lastName: firebaseUser.displayName?.split(' ')[1] || '',
         company: '',
-        provider: 'google',
+        provider: firebaseUser.providerData[0]?.providerId?.includes('google') ? 'google' : 'email',
         createdAt: new Date()
       };
     }
@@ -187,29 +197,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       console.log('Auth state changed. Firebase user:', firebaseUser?.email || 'None');
       
-      // Only auto-authenticate if user was previously authenticated in this session
-      // Check if user was already logged in (has active session flag)
-      const hasActiveSession = sessionStorage.getItem('userLoggedIn') === 'true';
-      
-      if (firebaseUser && hasActiveSession) {
-        console.log('Firebase user authenticated with active session, getting user data...');
+      if (firebaseUser) {
+        console.log('Firebase user found, getting user data...');
         const userData = await getUserData(firebaseUser);
         
         if (userData) {
           console.log('User data retrieved successfully:', userData.email);
           setUser(userData);
+          // Ensure session is marked as active
+          if (sessionStorage.getItem('userLoggedIn') !== 'true') {
+            sessionStorage.setItem('userLoggedIn', 'true');
+          }
         } else {
-          console.error('Failed to get user data, but Firebase user exists. This should not happen with new fallback logic.');
+          console.error('Failed to get user data, but Firebase user exists.');
           setUser(null);
         }
-      } else if (firebaseUser && !hasActiveSession) {
-        console.log('Firebase user found but no active session flag, signing out...');
-        // User might have been auto-signed in by Firebase, but we want explicit login
-        await signOut(auth);
-        setUser(null);
       } else {
         console.log('No Firebase user, checking for demo user...');
-        // Check for demo user in localStorage only if there's an active session
+        // Check if user was already logged in (has active session flag)
+        const hasActiveSession = sessionStorage.getItem('userLoggedIn') === 'true';
+        
         if (hasActiveSession) {
           const userData = localStorage.getItem('user');
           if (userData) {
@@ -304,6 +311,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(userData);
       sessionStorage.setItem('userLoggedIn', 'true');
       console.log('Login successful, user data set:', userData);
+      console.log('Session storage userLoggedIn set to true');
       return true;
     } catch (error: any) {
       console.error('Login failed:', error);
@@ -351,7 +359,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       
       console.log('Email validation passed, creating user document...');
-      await createUserDocument(result.user, { provider: 'google' });
+      // Create user document (non-blocking to avoid delays)
+      createUserDocument(result.user, { provider: 'google' }).then(() => {
+        console.log('User document created successfully for Google login');
+      }).catch((error) => {
+        console.warn('User document creation failed for Google login, but login will continue:', error);
+      });
       
       console.log('Getting user data...');
       const userData = await getUserData(result.user);
@@ -359,6 +372,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       setUser(userData);
       sessionStorage.setItem('userLoggedIn', 'true');
+      console.log('Session storage userLoggedIn set to true for Google login');
       console.log('Google authentication completed successfully');
       return true;
     } catch (error: any) {
@@ -394,21 +408,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const userCredential = await createUserWithEmailAndPassword(auth, userData.email, userData.password);
       console.log('Firebase user created:', userCredential.user.uid);
       
-      // Create user document in Firestore
-      await createUserDocument(userCredential.user, {
+      // Create user document in Firestore (non-blocking to avoid permission issues)
+      createUserDocument(userCredential.user, {
         firstName: userData.firstName,
         lastName: userData.lastName,
         company: userData.company,
         provider: 'email'
+      }).then(() => {
+        console.log('User document created in Firestore successfully');
+      }).catch((error) => {
+        console.warn('User document creation failed, but registration will continue:', error);
       });
-      console.log('User document created in Firestore');
       
-      // Get user data
-      const newUser = await getUserData(userCredential.user);
-      console.log('User data retrieved:', newUser);
+      // Create a user object immediately without waiting for Firestore
+      const newUser: User = {
+        id: userCredential.user.uid,
+        email: userCredential.user.email || '',
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+        company: userData.company || '',
+        provider: 'email',
+        createdAt: new Date()
+      };
       
+      console.log('Registration successful, setting user data:', newUser);
       setUser(newUser);
       sessionStorage.setItem('userLoggedIn', 'true');
+      console.log('Session storage userLoggedIn set to true for registration');
       return true;
     } catch (error: any) {
       console.error('Registration failed:', error);
@@ -470,14 +496,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       
       console.log('Email validation passed for registration, creating user document...');
-      await createUserDocument(result.user, { provider: 'google' });
+      // Create user document in Firestore (non-blocking to avoid permission issues)
+      createUserDocument(result.user, { provider: 'google' }).then(() => {
+        console.log('User document created in Firestore successfully');
+      }).catch((error) => {
+        console.warn('User document creation failed, but registration will continue:', error);
+      });
       
-      console.log('Getting user data for registration...');
-      const userData = await getUserData(result.user);
-      console.log('User data retrieved for registration:', userData);
+      // Create a user object immediately without waiting for Firestore
+      const newUser: User = {
+        id: result.user.uid,
+        email: result.user.email || '',
+        firstName: result.user.displayName?.split(' ')[0] || 'User',
+        lastName: result.user.displayName?.split(' ')[1] || '',
+        company: '',
+        provider: 'google',
+        createdAt: new Date()
+      };
       
-      setUser(userData);
+      console.log('Google registration successful, setting user data:', newUser);
+      setUser(newUser);
       sessionStorage.setItem('userLoggedIn', 'true');
+      console.log('Session storage userLoggedIn set to true for Google registration');
       console.log('Google registration completed successfully');
       return true;
     } catch (error: any) {
@@ -641,6 +681,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     updateUserProfile,
     changePassword
   };
+
+  // Debug logging for auth state changes
+  useEffect(() => {
+    console.log('Auth State Debug:', {
+      hasUser: !!user,
+      userEmail: user?.email,
+      isAuthenticated: !!user,
+      isLoading,
+      sessionFlag: sessionStorage.getItem('userLoggedIn')
+    });
+  }, [user, isLoading]);
 
   return (
     <AuthContext.Provider value={value}>

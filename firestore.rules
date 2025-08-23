@@ -1,0 +1,95 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 🔒 Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidUserData() {
+      // More flexible validation for user creation
+      let requiredFields = ['email', 'firstName', 'lastName', 'provider', 'createdAt'];
+      let hasRequiredFields = request.resource.data.keys().hasAll(requiredFields);
+      
+      // Type validation with better error handling
+      let validTypes = request.resource.data.email is string &&
+                      request.resource.data.firstName is string &&
+                      request.resource.data.lastName is string &&
+                      request.resource.data.provider is string;
+                      
+      return hasRequiredFields && validTypes;
+    }
+
+    function isValidUserUpdate() {
+      // Allow updates to specific fields only
+      let allowedFields = ['firstName', 'lastName', 'company', 'email'];
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(allowedFields);
+    }
+
+    // 👤 Users Collection - Allow user creation and self-management
+    match /users/{userId} {
+      // Allow reading own profile
+      allow read: if isOwner(userId);
+      
+      // Allow creating user document during registration
+      allow create: if isOwner(userId) && isValidUserData();
+      
+      // Allow updating own profile
+      allow update: if isOwner(userId) && isValidUserUpdate();
+      
+      // Allow deleting own account
+      allow delete: if isOwner(userId);
+    }
+
+    // 🔍 Scans Collection - User-specific scans
+    match /scans/{scanId} {
+      allow read, write: if isAuthenticated() && 
+        (resource == null || resource.data.userId == request.auth.uid) &&
+        (request.resource == null || request.resource.data.userId == request.auth.uid);
+    }
+
+    // 🛡 Vulnerabilities Collection - User-specific vulnerabilities
+    match /vulnerabilities/{vulnerabilityId} {
+      allow read, write: if isAuthenticated() && 
+        (resource == null || resource.data.userId == request.auth.uid) &&
+        (request.resource == null || request.resource.data.userId == request.auth.uid);
+    }
+
+    // 📄 Reports Collection - User-specific reports
+    match /reports/{reportId} {
+      allow read, write: if isAuthenticated() && 
+        (resource == null || resource.data.userId == request.auth.uid) &&
+        (request.resource == null || request.resource.data.userId == request.auth.uid);
+    }
+
+    // 💬 Conversations Collection - User-specific AI conversations
+    match /conversations/{conversationId} {
+      allow read, write: if isAuthenticated() && 
+        (resource == null || resource.data.userId == request.auth.uid) &&
+        (request.resource == null || request.resource.data.userId == request.auth.uid);
+
+      // Messages subcollection
+      match /messages/{messageId} {
+        allow read, write: if isAuthenticated() && 
+          (get(/databases/$(database)/documents/conversations/$(conversationId)).data.userId == request.auth.uid ||
+           resource == null);
+      }
+    }
+
+    // 🔧 Demo/Test data access
+    match /demo/{document=**} {
+      allow read: if true;
+    }
+
+    // 📊 Public configuration data
+    match /config/{document=**} {
+      allow read: if true;
+    }
+  }
+}
