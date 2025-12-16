@@ -108,7 +108,14 @@ const RegisterPage: React.FC = () => {
 
       if (success) {
         console.log('Registration successful, waiting for auth state update...');
-        // Don't redirect here - let the useEffect handle it when isAuthenticated becomes true
+        // Add a small delay to ensure auth state is properly set before redirect
+        setTimeout(() => {
+          // Double-check if redirect didn't happen through useEffect
+          if (window.location.pathname === '/register') {
+            console.log('Manual redirect after registration timeout');
+            router.push('/');
+          }
+        }, 500);
       } else {
         setErrors({ general: 'Registration failed. Please try again.' });
       }
@@ -136,8 +143,15 @@ const RegisterPage: React.FC = () => {
     try {
       const success = await registerWithGoogle();
       if (success) {
-        // Don't redirect here - let the useEffect handle it when isAuthenticated becomes true
+        // Add a small delay to ensure auth state is properly set before redirect
         console.log('Google signup successful, waiting for auth state update...');
+        setTimeout(() => {
+          // Double-check if redirect didn't happen through useEffect
+          if (window.location.pathname === '/register') {
+            console.log('Manual redirect after Google registration timeout');
+            router.push('/');
+          }
+        }, 500);
       } else {
         setErrors({ general: 'Google sign-up failed. Please try again.' });
       }

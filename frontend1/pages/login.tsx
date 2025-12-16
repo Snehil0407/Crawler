@@ -40,7 +40,10 @@ const LoginPage: React.FC = () => {
       const success = await login(email, password);
       if (success) {
         console.log('Login successful, redirecting to dashboard...');
-        router.push('/');
+        // Small delay to ensure auth state is set
+        setTimeout(() => {
+          router.push('/');
+        }, 100);
       } else {
         setError('Login failed. Please check your credentials.');
       }
@@ -61,7 +64,10 @@ const LoginPage: React.FC = () => {
       const success = await loginWithGoogle();
       if (success) {
         console.log('Google sign-in successful, redirecting to dashboard...');
-        router.push('/');
+        // Small delay to ensure auth state is set
+        setTimeout(() => {
+          router.push('/');
+        }, 100);
       } else {
         setError('Google sign-in failed. Please try again.');
       }
