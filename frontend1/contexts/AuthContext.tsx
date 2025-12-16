@@ -108,8 +108,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           createdAt: new Date(),
           ...additionalData
         });
-      } catch (error) {
+        console.log('User document created successfully in Firestore');
+      } catch (error: any) {
         console.error('Error creating user document:', error);
+        console.error('Error code:', error.code);
+        console.error('Error message:', error.message);
+        // Re-throw the error so the caller knows it failed
+        throw new Error(error.message || 'Failed to create user document in database');
       }
     }
 

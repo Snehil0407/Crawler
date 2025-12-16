@@ -1,0 +1,49 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Users collection - users can read and write their own document
+    match /users/{userId} {
+      // Allow read access to authenticated users for their own document
+      allow read: if request.auth != null && request.auth.uid == userId;
+      
+      // Allow create during registration (user creating their own document)
+      // More permissive to allow all required fields during registration
+      allow create: if request.auth != null && 
+                       request.auth.uid == userId &&
+                       request.resource.data.email is string &&
+                       request.resource.data.email == request.auth.token.email;
+      
+      // Allow update only if it's the user's own document
+      allow update: if request.auth != null && request.auth.uid == userId;
+      
+      // Prevent deletion of user documents
+      allow delete: if false;
+    }
+    
+    // Scans collection - users can manage their own scans
+    match /scans/{scanId} {
+      // Allow read if authenticated and it's the user's scan
+      allow read: if request.auth != null && 
+                     resource.data.userId == request.auth.uid;
+      
+      // Allow create if authenticated and userId matches auth
+      allow create: if request.auth != null && 
+                       request.resource.data.userId == request.auth.uid;
+      
+      // Allow update if authenticated and it's the user's scan
+      allow update: if request.auth != null && 
+                       resource.data.userId == request.auth.uid;
+      
+      // Allow delete if authenticated and it's the user's scan
+      allow delete: if request.auth != null && 
+                       resource.data.userId == request.auth.uid;
+    }
+    
+    // Deny all other access by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
